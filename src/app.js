@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const { serveSwagger, setupSwagger } = require('./middleware/swagger');
 
 const app = express();
 
@@ -9,6 +10,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
+
+// Swagger Documentation
+app.use('/api-docs', serveSwagger, setupSwagger);
+
+// Redirect /docs to /api-docs for convenience
+app.get('/docs', (req, res) => {
+	res.redirect('/api-docs');
+});
 
 // Simple test route trước khi load routes
 app.get('/health', (req, res) => {

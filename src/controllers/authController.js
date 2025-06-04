@@ -550,3 +550,262 @@ exports.deleteAvatar = async (req, res, next) => {
 		});
 	}
 };
+
+exports.logout = async (req, res, next) => {
+	try {
+		console.log('🚪 Logout request for user:', req.user._id);
+
+		// If you're using refresh tokens, you would invalidate them here
+		// For now, just return success as JWT tokens are stateless
+
+		res.status(200).json({
+			status: 'success',
+			message: 'Logout successful',
+			data: null,
+		});
+	} catch (error) {
+		console.error('❌ Logout error:', error);
+		res.status(500).json({
+			status: 'error',
+			message: 'Logout failed',
+			error: error.message,
+		});
+	}
+};
+
+// @desc    Send email verification
+exports.sendEmailVerification = async (req, res, next) => {
+	try {
+		console.log('📧 Send email verification request for user:', req.user._id);
+
+		const user = await User.findById(req.user._id);
+
+		if (!user) {
+			return res.status(404).json({
+				status: 'error',
+				message: 'User not found',
+			});
+		}
+
+		if (user.isVerified) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Email is already verified',
+			});
+		}
+
+		// Generate verification token
+		const verificationToken = user.generateEmailVerificationToken();
+		await user.save({ validateBeforeSave: false });
+
+		console.log('🔑 Email verification token generated for user:', user._id);
+
+		try {
+			await emailService.sendEmailVerification(user.email, verificationToken, user.fullName);
+
+			console.log('✅ Email verification sent successfully');
+
+			res.status(200).json({
+				status: 'success',
+				message: 'Email verification sent successfully. Please check your email.',
+			});
+		} catch (error) {
+			user.emailVerificationToken = undefined;
+			user.emailVerificationExpire = undefined;
+			await user.save({ validateBeforeSave: false });
+
+			console.error('❌ Failed to send email verification:', error);
+
+			return res.status(500).json({
+				status: 'error',
+				message: 'Email could not be sent. Please try again later.',
+			});
+		}
+	} catch (error) {
+		console.error('❌ Send email verification error:', error);
+		res.status(500).json({
+			status: 'error',
+			message: 'Failed to send email verification',
+			error: error.message,
+		});
+	}
+};
+// @desc    Verify email
+exports.verifyEmail = async (req, res, next) => {
+	try {
+		console.log('✅ Email verification request with token');
+
+		const { token } = req.params;
+
+		if (!token) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Verification token is required',
+			});
+		}
+
+		const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+		const user = await User.findOne({
+			emailVerificationToken: hashedToken,
+			emailVerificationExpire: { $gt: Date.now() },
+		});
+
+		if (!user) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Invalid or expired verification token',
+			});
+		}
+
+		console.log('✅ Valid verification token found for user:', user._id);
+
+		user.isVerified = true;
+		user.emailVerificationToken = undefined;
+		user.emailVerificationExpire = undefined;
+
+		await user.save();
+
+		console.log('✅ Email verified successfully for user:', user._id);
+
+		try {
+			await emailService.sendWelcomeEmail(user.email, user.fullName);
+		} catch (emailError) {
+			console.log('⚠️ Failed to send welcome email:', emailError.message);
+		}
+
+		res.status(200).json({
+			status: 'success',
+			message: 'Email verified successfully. Welcome to Carpooling!',
+			data: {
+				user: user,
+			},
+		});
+	} catch (error) {
+		console.error('❌ Email verification error:', error);
+		res.status(500).json({
+			status: 'error',
+			message: 'Failed to verify email',
+			error: error.message,
+		});
+	}
+};
+// @desc    Resend email verification
+exports.resendEmailVerification = async (req, res, next) => {
+	try {
+		console.log('🔄 Resend email verification request for user:', req.user._id);
+
+		const user = await User.findById(req.user._id);
+
+		if (!user) {
+			return res.status(404).json({
+				status: 'error',
+				message: 'User not found',
+			});
+		}
+
+		if (user.isVerified) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Email is already verified',
+			});
+		}
+
+		// Check if too many requests
+		if (user.emailVerificationExpire && user.emailVerificationExpire > Date.now()) {
+			const timeLeft = Math.ceil((user.emailVerificationExpire - Date.now()) / 1000 / 60);
+			return res.status(429).json({
+				status: 'error',
+				message: `Please wait ${timeLeft} minutes before requesting another verification email`,
+			});
+		}
+
+		// Generate new verification token
+		const verificationToken = user.generateEmailVerificationToken();
+		await user.save({ validateBeforeSave: false });
+
+		try {
+			await emailService.sendEmailVerification(user.email, verificationToken, user.fullName);
+
+			console.log('✅ Email verification resent successfully');
+
+			res.status(200).json({
+				status: 'success',
+				message: 'Email verification resent successfully. Please check your email.',
+			});
+		} catch (error) {
+			console.error('❌ Failed to resend email verification:', error);
+
+			return res.status(500).json({
+				status: 'error',
+				message: 'Email could not be sent. Please try again later.',
+			});
+		}
+	} catch (error) {
+		console.error('❌ Resend email verification error:', error);
+		res.status(500).json({
+			status: 'error',
+			message: 'Failed to resend email verification',
+			error: error.message,
+		});
+	}
+};
+
+// @desc    Delete account
+exports.deleteAccount = async (req, res, next) => {
+	try {
+		console.log('🗑️ Delete account request for user:', req.user._id);
+
+		const { password } = req.body;
+
+		if (!password) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Password confirmation is required to delete account',
+			});
+		}
+
+		const user = await User.findById(req.user._id).select('+password');
+
+		if (!user) {
+			return res.status(404).json({
+				status: 'error',
+				message: 'User not found',
+			});
+		}
+
+		const isPasswordValid = await user.comparePassword(password);
+
+		if (!isPasswordValid) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Incorrect password',
+			});
+		}
+
+		// Soft delete by setting isActive to false
+		user.isActive = false;
+		user.email = `deleted_${Date.now()}_${user.email}`;
+		await user.save();
+
+		console.log('✅ Account deactivated successfully for user:', user._id);
+
+		try {
+			await emailService.sendAccountDeletedEmail(user.email.replace(/^deleted_\d+_/, ''), user.fullName);
+		} catch (emailError) {
+			console.log('⚠️ Failed to send account deletion email:', emailError.message);
+		}
+
+		res.status(200).json({
+			status: 'success',
+			message: 'Account deleted successfully',
+		});
+	} catch (error) {
+		console.error('❌ Delete account error:', error);
+		res.status(500).json({
+			status: 'error',
+			message: 'Failed to delete account',
+			error: error.message,
+		});
+	}
+};
