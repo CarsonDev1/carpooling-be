@@ -248,8 +248,7 @@ userSchema.methods.isResetTokenValid = function () {
 	return this.resetPasswordExpire && this.resetPasswordExpire > Date.now();
 };
 
-module.exports = mongoose.model('User', userSchema);
-
+// Method to generate email verification token
 userSchema.methods.generateEmailVerificationToken = function () {
 	const verificationToken = crypto.randomBytes(32).toString('hex');
 
@@ -261,6 +260,10 @@ userSchema.methods.generateEmailVerificationToken = function () {
 
 	return verificationToken; // Return unhashed token
 };
+
+// Method to check if verification token is valid
 userSchema.methods.isVerificationTokenValid = function () {
 	return this.emailVerificationExpire && this.emailVerificationExpire > Date.now();
 };
+
+module.exports = mongoose.model('User', userSchema);
