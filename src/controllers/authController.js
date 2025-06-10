@@ -870,3 +870,20 @@ exports.logout = async (req, res, next) => {
 		});
 	}
 };
+
+module.exports = {
+	test: exports.test,
+	register: exports.register,           // ✅ Already exists
+	verifyOTP: exports.verifyOTP,         // ✅ Already exists  
+	resendOTP: exports.resendOTP,         // ✅ Already exists
+	setPassword: exports.setPassword,     // ✅ Already exists
+	login: exports.login,                 // ✅ Already exists
+	getMe: exports.getMe,                 // ✅ Already exists
+	updateProfile: exports.updateProfile, // ✅ Already exists
+	forgotPassword: exports.forgotPassword, // ✅ Already exists
+	resetPassword: exports.resetPassword,   // ✅ Already exists
+	changePassword: exports.changePassword, // ✅ Already exists
+	uploadAvatar: exports.uploadAvatar,     // ✅ Already exists
+	deleteAvatar: exports.deleteAvatar,     // ✅ Already exists
+	logout: exports.logout                  // ✅ Already exists
+};

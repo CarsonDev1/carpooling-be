@@ -1,5 +1,5 @@
+// src/config/swagger.js - Fixed version
 const swaggerJSDoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
 const path = require('path');
 
 const options = {
@@ -8,7 +8,7 @@ const options = {
 		info: {
 			title: 'Carpooling API',
 			version: '1.0.0',
-			description: 'API documentation for Carpooling application',
+			description: 'API documentation for Carpooling application with phone-based authentication',
 			contact: {
 				name: 'API Support',
 				email: 'support@carpooling.com',
@@ -20,7 +20,7 @@ const options = {
 		},
 		servers: [
 			{
-				url: process.env.API_URL || 'http://localhost:5000/api', // Đổi từ 6000 thành 5000
+				url: 'http://localhost:5000/api',
 				description: 'Development server',
 			},
 		],
@@ -33,58 +33,172 @@ const options = {
 					description: 'JWT token authentication',
 				},
 			},
+			schemas: {
+				User: {
+					type: 'object',
+					properties: {
+						_id: {
+							type: 'string',
+							description: 'User ID'
+						},
+						phone: {
+							type: 'string',
+							description: 'User phone number (primary identifier)',
+							example: '0987654321'
+						},
+						email: {
+							type: 'string',
+							format: 'email',
+							description: 'User email (optional)',
+							example: 'user@example.com'
+						},
+						fullName: {
+							type: 'string',
+							description: 'User full name',
+							example: 'Nguyen Van A'
+						},
+						isActive: {
+							type: 'boolean',
+							description: 'Account status'
+						},
+						isPhoneVerified: {
+							type: 'boolean',
+							description: 'Phone verification status'
+						},
+						registrationStep: {
+							type: 'number',
+							description: 'Current registration step (1-3)'
+						}
+					}
+				},
+				RegisterRequest: {
+					type: 'object',
+					required: ['fullName', 'phone'],
+					properties: {
+						fullName: {
+							type: 'string',
+							minLength: 2,
+							maxLength: 50,
+							description: 'User full name',
+							example: 'Nguyen Van A'
+						},
+						phone: {
+							type: 'string',
+							pattern: '^[0-9]{10,11}$',
+							description: 'User phone number',
+							example: '0987654321'
+						}
+					}
+				},
+				VerifyOTPRequest: {
+					type: 'object',
+					required: ['userId', 'otp'],
+					properties: {
+						userId: {
+							type: 'string',
+							description: 'User ID from registration',
+							example: '64f7b3b3b3b3b3b3b3b3b3b3'
+						},
+						otp: {
+							type: 'string',
+							pattern: '^[0-9]{6}$',
+							description: '6-digit OTP code',
+							example: '123456'
+						}
+					}
+				},
+				SetPasswordRequest: {
+					type: 'object',
+					required: ['userId', 'password', 'confirmPassword'],
+					properties: {
+						userId: {
+							type: 'string',
+							description: 'User ID',
+							example: '64f7b3b3b3b3b3b3b3b3b3b3'
+						},
+						password: {
+							type: 'string',
+							minLength: 6,
+							description: 'New password',
+							example: 'password123'
+						},
+						confirmPassword: {
+							type: 'string',
+							description: 'Confirm password',
+							example: 'password123'
+						}
+					}
+				},
+				LoginRequest: {
+					type: 'object',
+					required: ['phone', 'password'],
+					properties: {
+						phone: {
+							type: 'string',
+							pattern: '^[0-9]{10,11}$',
+							description: 'Phone number',
+							example: '0987654321'
+						},
+						password: {
+							type: 'string',
+							description: 'User password',
+							example: 'password123'
+						}
+					}
+				},
+				ErrorResponse: {
+					type: 'object',
+					properties: {
+						status: {
+							type: 'string',
+							example: 'error'
+						},
+						message: {
+							type: 'string',
+							description: 'Error message'
+						}
+					}
+				}
+			}
 		},
+		tags: [
+			{
+				name: 'Authentication',
+				description: 'User authentication and registration endpoints (phone-based)'
+			}
+		]
 	},
+	// Đây là phần quan trọng - phải đúng đường dẫn
 	apis: [
-		path.join(__dirname, '../routes/*.js'),
-		path.join(__dirname, '../controllers/*.js'),
-		path.join(__dirname, '../models/*.js'),
-		path.join(__dirname, '../docs/swagger.yaml'), // External YAML file
+		path.join(__dirname, '../routes/*.js'),      // Scan all route files
+		path.join(__dirname, '../controllers/*.js'), // Scan controllers if they have docs
+		path.join(__dirname, '../models/*.js'),      // Scan models if they have docs
+		// Add inline documentation
+		path.join(__dirname, '../docs/swagger-paths.js'), // We'll create this
 	],
 };
 
 const specs = swaggerJSDoc(options);
 
-// Custom CSS for Swagger UI
-const customCss = `
-	.swagger-ui .topbar { display: none }
-	.swagger-ui .info .title { color: #FF6B6B }
-	.swagger-ui .scheme-container { background: #fafafa; border: 1px solid #ddd }
-	.swagger-ui .btn.authorize { background-color: #FF6B6B; border-color: #FF6B6B }
-	.swagger-ui .btn.authorize:hover { background-color: #FF5252; border-color: #FF5252 }
-	.swagger-ui .opblock.opblock-post { border-color: #49cc90; background: rgba(73, 204, 144, 0.1) }
-	.swagger-ui .opblock.opblock-get { border-color: #61affe; background: rgba(97, 175, 254, 0.1) }
-	.swagger-ui .opblock.opblock-put { border-color: #fca130; background: rgba(252, 161, 48, 0.1) }
-	.swagger-ui .opblock.opblock-delete { border-color: #f93e3e; background: rgba(249, 62, 62, 0.1) }
-`;
+// Debug function
+const debugSwagger = () => {
+	console.log('🔍 Swagger Debug Info:');
+	console.log('📊 Total paths found:', Object.keys(specs.paths || {}).length);
+	console.log('📋 Available paths:', Object.keys(specs.paths || {}));
+	console.log('📦 Schemas found:', Object.keys(specs.components?.schemas || {}));
 
-// Swagger UI options
-const swaggerUiOptions = {
-	customCss,
-	customSiteTitle: 'Carpooling API Documentation',
-	customfavIcon: '/assets/favicon.ico',
-	swaggerOptions: {
-		persistAuthorization: true,
-		displayRequestDuration: true,
-		docExpansion: 'none',
-		filter: true,
-		showExtensions: true,
-		tryItOutEnabled: true,
-		requestInterceptor: (req) => {
-			// Add custom headers if needed
-			if (req.url.includes('/auth/') && !req.url.includes('/login') && !req.url.includes('/register')) {
-				const token = localStorage.getItem('token');
-				if (token) {
-					req.headers.Authorization = `Bearer ${token}`;
-				}
-			}
-			return req;
-		},
-	},
+	if (!specs.paths || Object.keys(specs.paths).length === 0) {
+		console.log('⚠️ No paths found in Swagger specs!');
+		console.log('📁 Check if route files contain JSDoc comments');
+		console.log('📝 APIs scanning paths:', options.apis);
+	} else {
+		console.log('✅ Swagger specs loaded successfully');
+	}
+
+	return specs;
 };
 
 module.exports = {
-	specs,
-	swaggerUi,
-	swaggerUiOptions,
+	specs: debugSwagger(),
+	debugSwagger
 };
