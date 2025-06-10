@@ -4,10 +4,20 @@ const crypto = require('crypto');
 
 const userSchema = new mongoose.Schema(
 	{
+		// Phone is now the primary identifier (required)
+		phone: {
+			type: String,
+			required: [true, 'Phone number is required'],
+			unique: true,
+			trim: true,
+			match: [/^[0-9]{10,11}$/, 'Please enter a valid phone number'],
+		},
+
+		// Email is now optional (can be added later in profile)
 		email: {
 			type: String,
-			required: [true, 'Email is required'],
 			unique: true,
+			sparse: true, // Allows multiple null values
 			lowercase: true,
 			trim: true,
 			match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'],
@@ -15,16 +25,36 @@ const userSchema = new mongoose.Schema(
 
 		password: {
 			type: String,
-			required: [true, 'Password is required'],
+			required: function () {
+				// Password is required only after step 2 (when registration is being completed)
+				return this.registrationStep >= 2;
+			},
 			minlength: [6, 'Password must be at least 6 characters'],
 			select: false, // Don't include password in queries by default
 		},
 
-		// Email verification
+		// Registration flow tracking
+		registrationStep: {
+			type: Number,
+			default: 1,
+			enum: [1, 2, 3], // 1: phone+name+otp, 2: set password, 3: completed
+		},
+		registrationCompletedAt: Date,
+
+		// Phone verification
+		isPhoneVerified: {
+			type: Boolean,
+			default: false,
+		},
+		phoneOTP: String,
+		phoneOTPExpiry: Date,
+
+		// Email verification (optional)
 		emailVerificationToken: String,
 		emailVerificationExpire: Date,
 
-		resetPasswordToken: String,
+		// Password reset (using SMS instead of email)
+		resetPasswordToken: String, // Will store OTP instead of token
 		resetPasswordExpire: Date,
 
 		fullName: {
@@ -33,14 +63,6 @@ const userSchema = new mongoose.Schema(
 			trim: true,
 			minlength: [2, 'Full name must be at least 2 characters'],
 			maxlength: [50, 'Full name cannot exceed 50 characters'],
-		},
-
-		phone: {
-			type: String,
-			unique: true,
-			sparse: true,
-			trim: true,
-			match: [/^[0-9]{10,11}$/, 'Please enter a valid phone number'],
 		},
 
 		avatar: {
@@ -144,13 +166,13 @@ const userSchema = new mongoose.Schema(
 		notificationSettings: {
 			email: { type: Boolean, default: true },
 			push: { type: Boolean, default: true },
-			sms: { type: Boolean, default: false },
+			sms: { type: Boolean, default: true }, // Changed default to true since phone is primary
 		},
 
 		// Account status
 		isActive: {
 			type: Boolean,
-			default: true,
+			default: false, // Only active after completing registration
 		},
 
 		isVerified: {
@@ -176,10 +198,19 @@ const userSchema = new mongoose.Schema(
 // Indexes
 userSchema.index({ isActive: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ registrationStep: 1 });
+userSchema.index({ isPhoneVerified: 1 });
+userSchema.index({ phone: 1 }); // Primary identifier
+userSchema.index({ email: 1 }, { sparse: true }); // Sparse index for optional email
 
 // Virtual for account locked status
 userSchema.virtual('isLocked').get(function () {
 	return !!(this.lockUntil && this.lockUntil > Date.now());
+});
+
+// Virtual for registration completion status
+userSchema.virtual('isRegistrationComplete').get(function () {
+	return this.registrationStep === 3 && this.isActive && this.isPhoneVerified;
 });
 
 // Virtual for age calculation
@@ -223,6 +254,10 @@ userSchema.methods.toJSON = function () {
 
 	// Remove sensitive fields
 	delete userObject.password;
+	delete userObject.phoneOTP;
+	delete userObject.phoneOTPExpiry;
+	delete userObject.resetPasswordToken;
+	delete userObject.resetPasswordExpire;
 	delete userObject.loginAttempts;
 	delete userObject.lockUntil;
 	delete userObject.__v;
@@ -230,25 +265,25 @@ userSchema.methods.toJSON = function () {
 	return userObject;
 };
 
-// Method to generate password reset token
-userSchema.methods.generatePasswordResetToken = function () {
-	const resetToken = crypto.randomBytes(32).toString('hex');
+// Method to generate password reset token (now OTP for SMS)
+userSchema.methods.generatePasswordResetOTP = function () {
+	const resetOTP = Math.floor(100000 + Math.random() * 900000).toString();
 
-	// Hash token and set to resetPasswordToken field
-	this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+	// Store OTP directly (no hashing needed for OTP)
+	this.resetPasswordToken = resetOTP;
 
 	// Set expire time (30 minutes)
 	this.resetPasswordExpire = Date.now() + 30 * 60 * 1000;
 
-	return resetToken; // Return unhashed token
+	return resetOTP;
 };
 
-// Method to check if reset token is valid
-userSchema.methods.isResetTokenValid = function () {
+// Method to check if reset OTP is valid
+userSchema.methods.isResetOTPValid = function () {
 	return this.resetPasswordExpire && this.resetPasswordExpire > Date.now();
 };
 
-// Method to generate email verification token
+// Method to generate email verification token (optional since email is optional)
 userSchema.methods.generateEmailVerificationToken = function () {
 	const verificationToken = crypto.randomBytes(32).toString('hex');
 
@@ -264,6 +299,53 @@ userSchema.methods.generateEmailVerificationToken = function () {
 // Method to check if verification token is valid
 userSchema.methods.isVerificationTokenValid = function () {
 	return this.emailVerificationExpire && this.emailVerificationExpire > Date.now();
+};
+
+// Method to generate OTP for phone verification
+userSchema.methods.generatePhoneOTP = function () {
+	const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+	this.phoneOTP = otp;
+	this.phoneOTPExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+	return otp;
+};
+
+// Method to verify phone OTP
+userSchema.methods.verifyPhoneOTP = function (otp) {
+	if (!this.phoneOTP || !this.phoneOTPExpiry) {
+		return false;
+	}
+
+	if (this.phoneOTPExpiry < Date.now()) {
+		return false; // Expired
+	}
+
+	return this.phoneOTP === otp;
+};
+
+// Method to clear phone OTP
+userSchema.methods.clearPhoneOTP = function () {
+	this.phoneOTP = undefined;
+	this.phoneOTPExpiry = undefined;
+};
+
+// Method to move to next registration step
+userSchema.methods.nextRegistrationStep = function () {
+	if (this.registrationStep < 3) {
+		this.registrationStep += 1;
+	}
+
+	// Activate account when registration is complete
+	if (this.registrationStep === 3) {
+		this.isActive = true;
+		this.registrationCompletedAt = new Date();
+	}
+};
+
+// Method to generate a display identifier (phone or email)
+userSchema.methods.getDisplayIdentifier = function () {
+	return this.phone || this.email || this.fullName;
 };
 
 module.exports = mongoose.model('User', userSchema);
