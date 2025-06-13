@@ -14,10 +14,11 @@ const userSchema = new mongoose.Schema(
 		},
 
 		// Email is now optional (can be added later in profile)
+		// IMPORTANT: Remove unique: true here since we'll handle it with sparse index
 		email: {
 			type: String,
-			unique: true,
-			sparse: true, // Allows multiple null values
+			// unique: true, // REMOVED - will be handled by sparse index
+			sparse: true, // This allows multiple null values
 			lowercase: true,
 			trim: true,
 			match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'],
@@ -164,7 +165,7 @@ const userSchema = new mongoose.Schema(
 
 		// Notification settings
 		notificationSettings: {
-			email: { type: Boolean, default: true },
+			email: { type: Boolean, default: false }, // Default false since email is optional
 			push: { type: Boolean, default: true },
 			sms: { type: Boolean, default: true }, // Changed default to true since phone is primary
 		},
@@ -195,13 +196,40 @@ const userSchema = new mongoose.Schema(
 	}
 );
 
-// Indexes
+// FIXED INDEXES - Use sparse index for email to allow multiple null values
 userSchema.index({ isActive: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ registrationStep: 1 });
 userSchema.index({ isPhoneVerified: 1 });
-userSchema.index({ phone: 1 }); // Primary identifier
-userSchema.index({ email: 1 }, { sparse: true }); // Sparse index for optional email
+userSchema.index({ phone: 1 }); // Primary identifier - unique
+userSchema.index({ email: 1 }, {
+	sparse: true, // This is the key fix - allows multiple null values
+	unique: true  // But still enforces uniqueness for non-null values
+});
+
+// Add a pre-save hook to ensure email uniqueness when not null
+userSchema.pre('save', async function (next) {
+	// Only check email uniqueness if email is being modified and is not null
+	if (this.isModified('email') && this.email) {
+		try {
+			const existingUser = await this.constructor.findOne({
+				email: this.email,
+				_id: { $ne: this._id }
+			});
+
+			if (existingUser) {
+				const error = new Error('Email already exists');
+				error.code = 11000;
+				error.keyValue = { email: this.email };
+				return next(error);
+			}
+		} catch (error) {
+			return next(error);
+		}
+	}
+
+	next();
+});
 
 // Virtual for account locked status
 userSchema.virtual('isLocked').get(function () {
