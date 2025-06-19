@@ -5,6 +5,9 @@ const authMiddleware = require('../middleware/auth');
 
 console.log('🔥 Loading trip routes...');
 
+// Get vehicle types (không cần auth)
+router.get('/vehicle-types', tripController.getVehicleTypes);
+
 // All trip routes are protected and require authentication
 router.use(authMiddleware.protect);
 

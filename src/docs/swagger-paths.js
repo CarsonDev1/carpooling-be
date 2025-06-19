@@ -366,6 +366,11 @@
  *                 type: string
  *                 format: date-time
  *                 example: "2024-07-20T08:00:00Z"
+ *               vehicleType:
+ *                 type: string
+ *                 enum: [motorcycle, car, suv, luxury]
+ *                 description: Optional. Type of vehicle to use for price calculation. Will override user's vehicle information.
+ *                 example: "car"
  *     responses:
  *       200:
  *         description: Price estimate calculated successfully
@@ -404,6 +409,9 @@
  *                     distance:
  *                       type: number
  *                       example: 8.2
+ *                     vehicleType:
+ *                       type: string
+ *                       example: "car"
  *       500:
  *         description: Server error
  */
@@ -471,6 +479,11 @@
  *                 type: number
  *                 description: Optional. If not provided, price will be calculated automatically
  *                 example: 50000
+ *               vehicleType:
+ *                 type: string
+ *                 enum: [motorcycle, car, suv, luxury]
+ *                 description: Optional. Type of vehicle to use for price calculation. Will override user's vehicle information.
+ *                 example: "car"
  *               currency:
  *                 type: string
  *                 default: "VND"
@@ -513,6 +526,67 @@
  *         description: Trip created successfully
  *       401:
  *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * /trips/vehicle-types:
+ *   get:
+ *     summary: Get available vehicle types
+ *     description: Get a list of all available vehicle types with their details and pricing information
+ *     tags: [Trips]
+ *     responses:
+ *       200:
+ *         description: List of available vehicle types
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     motorcycle:
+ *                       type: object
+ *                       properties:
+ *                         name:
+ *                           type: string
+ *                           example: "Xe máy"
+ *                         baseRate:
+ *                           type: number
+ *                           example: 5000
+ *                         description:
+ *                           type: string
+ *                           example: "Phù hợp cho 1-2 người, chi phí thấp"
+ *                         maxPassengers:
+ *                           type: number
+ *                           example: 2
+ *                         icon:
+ *                           type: string
+ *                           example: "motorcycle"
+ *                     car:
+ *                       type: object
+ *                       properties:
+ *                         name:
+ *                           type: string
+ *                           example: "Xe hơi"
+ *                         baseRate:
+ *                           type: number
+ *                           example: 10000
+ *                         description:
+ *                           type: string
+ *                           example: "Phù hợp cho gia đình nhỏ hoặc nhóm 3-4 người"
+ *                         maxPassengers:
+ *                           type: number
+ *                           example: 4
+ *                         icon:
+ *                           type: string
+ *                           example: "car"
  *       500:
  *         description: Server error
  */

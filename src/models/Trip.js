@@ -14,14 +14,17 @@ const tripSchema = new mongoose.Schema(
 				trim: true,
 			},
 			coordinates: {
-				type: {
-					type: String,
-					enum: ['Point'],
-					default: 'Point',
-				},
-				coordinates: {
-					type: [Number], // [longitude, latitude]
+				lat: {
+					type: Number,
 					required: true,
+					min: -90,
+					max: 90,
+				},
+				lng: {
+					type: Number,
+					required: true,
+					min: -180,
+					max: 180,
 				},
 			},
 		},
@@ -32,14 +35,17 @@ const tripSchema = new mongoose.Schema(
 				trim: true,
 			},
 			coordinates: {
-				type: {
-					type: String,
-					enum: ['Point'],
-					default: 'Point',
-				},
-				coordinates: {
-					type: [Number], // [longitude, latitude]
+				lat: {
+					type: Number,
 					required: true,
+					min: -90,
+					max: 90,
+				},
+				lng: {
+					type: Number,
+					required: true,
+					min: -180,
+					max: 180,
 				},
 			},
 		},
@@ -69,14 +75,17 @@ const tripSchema = new mongoose.Schema(
 					trim: true,
 				},
 				coordinates: {
-					type: {
-						type: String,
-						enum: ['Point'],
-						default: 'Point',
-					},
-					coordinates: {
-						type: [Number], // [longitude, latitude]
+					lat: {
+						type: Number,
 						required: true,
+						min: -90,
+						max: 90,
+					},
+					lng: {
+						type: Number,
+						required: true,
+						min: -180,
+						max: 180,
 					},
 				},
 				estimatedArrivalTime: {
@@ -88,6 +97,12 @@ const tripSchema = new mongoose.Schema(
 			type: Number,
 			default: 0,
 			min: 0,
+		},
+		// Lưu loại xe được sử dụng cho chuyến đi (dùng cho tính giá)
+		vehicleTypeUsed: {
+			type: String,
+			enum: ['motorcycle', 'car', 'suv', 'luxury'],
+			default: 'car',
 		},
 		currency: {
 			type: String,

@@ -16,15 +16,41 @@ const calculateDistance = (start, end) => {
 	return distance; // Trả về khoảng cách bằng km
 };
 
+// Định nghĩa các loại xe và giá cơ bản
+const VEHICLE_TYPES = {
+	motorcycle: {
+		name: 'Xe máy',
+		baseRate: 5000, // 5,000 VND/km
+		description: 'Phù hợp cho 1-2 người, chi phí thấp',
+		maxPassengers: 2,
+		icon: 'motorcycle',
+	},
+	car: {
+		name: 'Xe hơi',
+		baseRate: 10000, // 10,000 VND/km
+		description: 'Phù hợp cho gia đình nhỏ hoặc nhóm 3-4 người',
+		maxPassengers: 4,
+		icon: 'car',
+	},
+	suv: {
+		name: 'SUV/MPV',
+		baseRate: 12000, // 12,000 VND/km
+		description: 'Phù hợp cho nhóm 5-7 người và khoảng trống cho hành lý',
+		maxPassengers: 7,
+		icon: 'suv',
+	},
+	luxury: {
+		name: 'Xe sang',
+		baseRate: 15000, // 15,000 VND/km
+		description: 'Trải nghiệm cao cấp với xe hiện đại và thoải mái',
+		maxPassengers: 4,
+		icon: 'luxury-car',
+	},
+};
+
 // Xác định giá cơ bản theo loại xe
 const getBaseRateByVehicleType = (vehicleType) => {
-	const rates = {
-		motorcycle: 5000, // 5,000 VND/km cho xe máy
-		car: 10000, // 10,000 VND/km cho xe hơi thông thường
-		suv: 12000, // 12,000 VND/km cho SUV
-		luxury: 15000, // 15,000 VND/km cho xe sang
-	};
-	return rates[vehicleType] || rates.car; // Mặc định là xe hơi nếu không xác định
+	return VEHICLE_TYPES[vehicleType]?.baseRate || VEHICLE_TYPES.car.baseRate;
 };
 
 // Hệ số cho giờ cao điểm
@@ -83,4 +109,6 @@ const calculatePrice = (startCoords, endCoords, vehicle, departureTime) => {
 module.exports = {
 	calculatePrice,
 	calculateDistance,
+	VEHICLE_TYPES,
+	getBaseRateByVehicleType,
 };

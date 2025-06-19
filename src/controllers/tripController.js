@@ -2,7 +2,7 @@ const Trip = require('../models/Trip');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const mongoose = require('mongoose');
-const { calculatePrice } = require('../utils/priceCalculator');
+const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
 
 /**
  * @swagger
@@ -99,6 +99,7 @@ exports.createTrip = async (req, res) => {
 			currency,
 			recurring,
 			estimatedArrivalTime,
+			vehicleType,
 		} = req.body;
 
 		// Nếu giá không được cung cấp, tính tự động
@@ -108,11 +109,25 @@ exports.createTrip = async (req, res) => {
 			const user = await User.findById(req.user._id);
 			const vehicle = user.vehicle || {};
 
-			// Xác định loại phương tiện
-			let vehicleType = 'car'; // Mặc định
-			if (vehicle.brand) {
-				if (vehicle.seats <= 2) vehicleType = 'motorcycle';
-				else if (vehicle.seats > 5) vehicleType = 'suv';
+			// Xác định loại phương tiện từ request hoặc từ thông tin xe
+			let finalVehicleType = vehicleType;
+
+			// Nếu không có vehicleType trong request, xác định từ thông tin xe
+			if (!finalVehicleType) {
+				if (vehicle.brand) {
+					// Logic phân loại xe dựa trên thông tin
+					if (vehicle.seats <= 2) finalVehicleType = 'motorcycle';
+					else if (vehicle.seats > 5) finalVehicleType = 'suv';
+					else finalVehicleType = 'car';
+
+					// Logic xác định xe sang dựa vào brand
+					const luxuryBrands = ['mercedes', 'bmw', 'audi', 'lexus'];
+					if (luxuryBrands.some((brand) => vehicle.brand.toLowerCase().includes(brand))) {
+						finalVehicleType = 'luxury';
+					}
+				} else {
+					finalVehicleType = 'car'; // Mặc định
+				}
 			}
 
 			// Tính giá tự động
@@ -120,7 +135,7 @@ exports.createTrip = async (req, res) => {
 				startLocation.coordinates,
 				endLocation.coordinates,
 				{
-					type: vehicleType,
+					type: finalVehicleType,
 					year: vehicle.year || new Date().getFullYear() - 3,
 				},
 				departureTime
@@ -179,6 +194,7 @@ exports.createTrip = async (req, res) => {
 			currency: currency || 'VND',
 			recurring: recurring || { isRecurring: false },
 			estimatedArrivalTime,
+			vehicleTypeUsed: vehicleType,
 		});
 
 		res.status(201).json({
@@ -1681,19 +1697,31 @@ exports.updateTripStatus = async (req, res) => {
 // @access  Private
 exports.estimatePrice = async (req, res) => {
 	try {
-		const { startLocation, endLocation, departureTime } = req.body;
+		const { startLocation, endLocation, departureTime, vehicleType } = req.body;
 
 		// Lấy thông tin về xe từ người dùng
 		const user = await User.findById(req.user._id);
 		const vehicle = user.vehicle || {};
 
-		// Xác định loại phương tiện từ thông tin xe
-		let vehicleType = 'car'; // Mặc định
-		if (vehicle.brand) {
-			// Logic phân loại xe dựa trên thông tin
-			if (vehicle.seats <= 2) vehicleType = 'motorcycle';
-			else if (vehicle.seats > 5) vehicleType = 'suv';
-			// Có thể thêm logic xác định xe sang dựa vào brand
+		// Xác định loại phương tiện từ thông tin xe hoặc từ request
+		let finalVehicleType = vehicleType;
+
+		// Nếu không có vehicleType trong request, xác định từ thông tin xe
+		if (!finalVehicleType) {
+			if (vehicle.brand) {
+				// Logic phân loại xe dựa trên thông tin
+				if (vehicle.seats <= 2) finalVehicleType = 'motorcycle';
+				else if (vehicle.seats > 5) finalVehicleType = 'suv';
+				else finalVehicleType = 'car';
+
+				// Logic xác định xe sang dựa vào brand (có thể mở rộng)
+				const luxuryBrands = ['mercedes', 'bmw', 'audi', 'lexus'];
+				if (luxuryBrands.some((brand) => vehicle.brand.toLowerCase().includes(brand))) {
+					finalVehicleType = 'luxury';
+				}
+			} else {
+				finalVehicleType = 'car'; // Mặc định
+			}
 		}
 
 		// Tính giá
@@ -1701,7 +1729,7 @@ exports.estimatePrice = async (req, res) => {
 			startLocation.coordinates,
 			endLocation.coordinates,
 			{
-				type: vehicleType,
+				type: finalVehicleType,
 				year: vehicle.year || new Date().getFullYear() - 3,
 			},
 			departureTime
@@ -1714,10 +1742,29 @@ exports.estimatePrice = async (req, res) => {
 				currency: 'VND',
 				breakdown: priceData.breakdown,
 				distance: priceData.breakdown.distanceInKm,
+				vehicleType: finalVehicleType,
 			},
 		});
 	} catch (error) {
 		console.error('Price estimation error:', error);
+		res.status(500).json({
+			success: false,
+			error: error.message,
+		});
+	}
+};
+
+// @desc    Get available vehicle types for price calculation
+// @route   GET /api/trips/vehicle-types
+// @access  Public
+exports.getVehicleTypes = async (req, res) => {
+	try {
+		res.status(200).json({
+			success: true,
+			data: VEHICLE_TYPES,
+		});
+	} catch (error) {
+		console.error('Get vehicle types error:', error);
 		res.status(500).json({
 			success: false,
 			error: error.message,
