@@ -39,37 +39,37 @@ const options = {
 					properties: {
 						_id: {
 							type: 'string',
-							description: 'User ID'
+							description: 'User ID',
 						},
 						phone: {
 							type: 'string',
 							description: 'User phone number (primary identifier)',
-							example: '0987654321'
+							example: '0987654321',
 						},
 						email: {
 							type: 'string',
 							format: 'email',
 							description: 'User email (optional)',
-							example: 'user@example.com'
+							example: 'user@example.com',
 						},
 						fullName: {
 							type: 'string',
 							description: 'User full name',
-							example: 'Nguyen Van A'
+							example: 'Nguyen Van A',
 						},
 						isActive: {
 							type: 'boolean',
-							description: 'Account status'
+							description: 'Account status',
 						},
 						isPhoneVerified: {
 							type: 'boolean',
-							description: 'Phone verification status'
+							description: 'Phone verification status',
 						},
 						registrationStep: {
 							type: 'number',
-							description: 'Current registration step (1-3)'
-						}
-					}
+							description: 'Current registration step (1-3)',
+						},
+					},
 				},
 				RegisterRequest: {
 					type: 'object',
@@ -80,15 +80,15 @@ const options = {
 							minLength: 2,
 							maxLength: 50,
 							description: 'User full name',
-							example: 'Nguyen Van A'
+							example: 'Nguyen Van A',
 						},
 						phone: {
 							type: 'string',
 							pattern: '^[0-9]{10,11}$',
 							description: 'User phone number',
-							example: '0987654321'
-						}
-					}
+							example: '0987654321',
+						},
+					},
 				},
 				VerifyOTPRequest: {
 					type: 'object',
@@ -97,15 +97,15 @@ const options = {
 						userId: {
 							type: 'string',
 							description: 'User ID from registration',
-							example: '64f7b3b3b3b3b3b3b3b3b3b3'
+							example: '64f7b3b3b3b3b3b3b3b3b3b3',
 						},
 						otp: {
 							type: 'string',
 							pattern: '^[0-9]{6}$',
 							description: '6-digit OTP code',
-							example: '123456'
-						}
-					}
+							example: '123456',
+						},
+					},
 				},
 				SetPasswordRequest: {
 					type: 'object',
@@ -114,20 +114,20 @@ const options = {
 						userId: {
 							type: 'string',
 							description: 'User ID',
-							example: '64f7b3b3b3b3b3b3b3b3b3b3'
+							example: '64f7b3b3b3b3b3b3b3b3b3b3',
 						},
 						password: {
 							type: 'string',
 							minLength: 6,
 							description: 'New password',
-							example: 'password123'
+							example: 'password123',
 						},
 						confirmPassword: {
 							type: 'string',
 							description: 'Confirm password',
-							example: 'password123'
-						}
-					}
+							example: 'password123',
+						},
+					},
 				},
 				LoginRequest: {
 					type: 'object',
@@ -137,42 +137,46 @@ const options = {
 							type: 'string',
 							pattern: '^[0-9]{10,11}$',
 							description: 'Phone number',
-							example: '0987654321'
+							example: '0987654321',
 						},
 						password: {
 							type: 'string',
 							description: 'User password',
-							example: 'password123'
-						}
-					}
+							example: 'password123',
+						},
+					},
 				},
 				ErrorResponse: {
 					type: 'object',
 					properties: {
 						status: {
 							type: 'string',
-							example: 'error'
+							example: 'error',
 						},
 						message: {
 							type: 'string',
-							description: 'Error message'
-						}
-					}
-				}
-			}
+							description: 'Error message',
+						},
+					},
+				},
+			},
 		},
 		tags: [
 			{
 				name: 'Authentication',
-				description: 'User authentication and registration endpoints (phone-based)'
-			}
-		]
+				description: 'User authentication and registration endpoints (phone-based)',
+			},
+			{
+				name: 'Trips',
+				description: 'Create, manage and join carpooling trips',
+			},
+		],
 	},
 	// Đây là phần quan trọng - phải đúng đường dẫn
 	apis: [
-		path.join(__dirname, '../routes/*.js'),      // Scan all route files
+		path.join(__dirname, '../routes/*.js'), // Scan all route files
 		path.join(__dirname, '../controllers/*.js'), // Scan controllers if they have docs
-		path.join(__dirname, '../models/*.js'),      // Scan models if they have docs
+		path.join(__dirname, '../models/*.js'), // Scan models if they have docs
 		// Add inline documentation
 		path.join(__dirname, '../docs/swagger-paths.js'), // We'll create this
 	],
@@ -200,5 +204,5 @@ const debugSwagger = () => {
 
 module.exports = {
 	specs: debugSwagger(),
-	debugSwagger
+	debugSwagger,
 };

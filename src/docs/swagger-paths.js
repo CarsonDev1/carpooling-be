@@ -311,4 +311,210 @@
  *         description: Password reset successful
  */
 
+/**
+ * @swagger
+ * /trips/estimate-price:
+ *   post:
+ *     summary: Estimate trip price
+ *     description: Estimate the price of a trip based on distance, vehicle information, and time
+ *     tags: [Trips]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [startLocation, endLocation, departureTime]
+ *             properties:
+ *               startLocation:
+ *                 type: object
+ *                 required: [address, coordinates]
+ *                 properties:
+ *                   address:
+ *                     type: string
+ *                     example: "227 Nguyen Van Cu, Q5, TP HCM"
+ *                   coordinates:
+ *                     type: object
+ *                     required: [lat, lng]
+ *                     properties:
+ *                       lat:
+ *                         type: number
+ *                         example: 10.7631
+ *                       lng:
+ *                         type: number
+ *                         example: 106.6814
+ *               endLocation:
+ *                 type: object
+ *                 required: [address, coordinates]
+ *                 properties:
+ *                   address:
+ *                     type: string
+ *                     example: "Landmark 81, Vinhomes Central Park, TP HCM"
+ *                   coordinates:
+ *                     type: object
+ *                     required: [lat, lng]
+ *                     properties:
+ *                       lat:
+ *                         type: number
+ *                         example: 10.7951
+ *                       lng:
+ *                         type: number
+ *                         example: 106.7218
+ *               departureTime:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2024-07-20T08:00:00Z"
+ *     responses:
+ *       200:
+ *         description: Price estimate calculated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     estimatedPrice:
+ *                       type: number
+ *                       example: 42000
+ *                     currency:
+ *                       type: string
+ *                       example: "VND"
+ *                     breakdown:
+ *                       type: object
+ *                       properties:
+ *                         distanceInKm:
+ *                           type: number
+ *                           example: 8.2
+ *                         baseRate:
+ *                           type: number
+ *                           example: 10000
+ *                         peakHourMultiplier:
+ *                           type: number
+ *                           example: 1.2
+ *                         qualityMultiplier:
+ *                           type: number
+ *                           example: 1.1
+ *                     distance:
+ *                       type: number
+ *                       example: 8.2
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * /trips:
+ *   post:
+ *     summary: Create a new trip
+ *     description: Create a new trip as a driver. If price is not provided, it will be calculated automatically based on distance, vehicle information and time.
+ *     tags: [Trips]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [startLocation, endLocation, departureTime, availableSeats]
+ *             properties:
+ *               startLocation:
+ *                 type: object
+ *                 properties:
+ *                   address:
+ *                     type: string
+ *                     example: "227 Nguyen Van Cu, Q5, TP HCM"
+ *                   coordinates:
+ *                     type: object
+ *                     properties:
+ *                       lat:
+ *                         type: number
+ *                         example: 10.7631
+ *                       lng:
+ *                         type: number
+ *                         example: 106.6814
+ *               endLocation:
+ *                 type: object
+ *                 properties:
+ *                   address:
+ *                     type: string
+ *                     example: "Landmark 81, Vinhomes Central Park, TP HCM"
+ *                   coordinates:
+ *                     type: object
+ *                     properties:
+ *                       lat:
+ *                         type: number
+ *                         example: 10.7951
+ *                       lng:
+ *                         type: number
+ *                         example: 106.7218
+ *               departureTime:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2024-07-20T08:00:00Z"
+ *               estimatedArrivalTime:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2024-07-20T09:00:00Z"
+ *               availableSeats:
+ *                 type: number
+ *                 minimum: 1
+ *                 example: 3
+ *               price:
+ *                 type: number
+ *                 description: Optional. If not provided, price will be calculated automatically
+ *                 example: 50000
+ *               currency:
+ *                 type: string
+ *                 default: "VND"
+ *                 example: "VND"
+ *               notes:
+ *                 type: string
+ *                 example: "Đi làm hàng ngày, có điều hòa"
+ *               stops:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     address:
+ *                       type: string
+ *                       example: "Đại học Sài Gòn, Q5, TP HCM"
+ *                     coordinates:
+ *                       type: object
+ *                       properties:
+ *                         lat:
+ *                           type: number
+ *                           example: 10.7595
+ *                         lng:
+ *                           type: number
+ *                           example: 106.6782
+ *                     estimatedArrivalTime:
+ *                       type: string
+ *                       format: date-time
+ *               recurring:
+ *                 type: object
+ *                 properties:
+ *                   isRecurring:
+ *                     type: boolean
+ *                     example: false
+ *                   pattern:
+ *                     type: string
+ *                     enum: [daily, weekdays, weekends, weekly]
+ *                     example: "daily"
+ *     responses:
+ *       201:
+ *         description: Trip created successfully
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
 module.exports = {}; // Export empty object since this is just for documentation

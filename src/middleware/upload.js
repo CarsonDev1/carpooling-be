@@ -1,5 +1,26 @@
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { localStorage } = require('../config/cloudinary');
+
+// Ensure uploads directory exists
+const ensureUploadsDirectoryExists = () => {
+	const uploadsDir = path.join(process.cwd(), 'uploads');
+	const avatarsDir = path.join(uploadsDir, 'avatars');
+
+	if (!fs.existsSync(uploadsDir)) {
+		console.log('📁 Creating uploads directory');
+		fs.mkdirSync(uploadsDir);
+	}
+
+	if (!fs.existsSync(avatarsDir)) {
+		console.log('📁 Creating avatars directory');
+		fs.mkdirSync(avatarsDir);
+	}
+};
+
+// Call this function when the server starts
+ensureUploadsDirectoryExists();
 
 // File filter function
 const fileFilter = (req, file, cb) => {
@@ -23,7 +44,23 @@ const fileFilter = (req, file, cb) => {
 
 // Upload configuration (local storage only)
 const upload = multer({
-	storage: localStorage,
+	storage: multer.diskStorage({
+		destination: function (req, file, cb) {
+			const uploadDir = path.join(process.cwd(), 'uploads/avatars');
+			// Double-check directory exists before attempting upload
+			if (!fs.existsSync(uploadDir)) {
+				fs.mkdirSync(uploadDir, { recursive: true });
+			}
+			cb(null, uploadDir);
+		},
+		filename: function (req, file, cb) {
+			const timestamp = Date.now();
+			const userId = req.user ? req.user._id : 'anonymous';
+			const randomSuffix = Math.round(Math.random() * 1e9);
+			const extension = file.originalname.split('.').pop();
+			cb(null, `avatar_${userId}_${timestamp}_${randomSuffix}.${extension}`);
+		},
+	}),
 	limits: {
 		fileSize: 5 * 1024 * 1024, // 5MB limit
 		files: 1,
@@ -64,7 +101,7 @@ exports.handleUploadError = (error, req, res, next) => {
 		}
 	}
 
-	if (error.message.includes('image')) {
+	if (error.message && error.message.includes('image')) {
 		return res.status(400).json({
 			status: 'error',
 			message: error.message,
@@ -72,10 +109,14 @@ exports.handleUploadError = (error, req, res, next) => {
 		});
 	}
 
-	res.status(400).json({
+	// If we reached this point, it's an unhandled error
+	return res.status(400).json({
 		status: 'error',
 		message: 'File upload failed. Please try again.',
 		code: 'UPLOAD_FAILED',
 		details: process.env.NODE_ENV === 'development' ? error.message : undefined,
 	});
 };
+
+// Export the directory check function for use in server startup
+exports.ensureUploadsDirectoryExists = ensureUploadsDirectoryExists;

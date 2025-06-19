@@ -8,6 +8,9 @@ console.log('🔥 Loading trip routes...');
 // All trip routes are protected and require authentication
 router.use(authMiddleware.protect);
 
+// Ước tính giá trước khi tạo chuyến đi
+router.post('/estimate-price', tripController.estimatePrice);
+
 // Get all trips (with filters)
 router.get('/', tripController.getTrips);
 

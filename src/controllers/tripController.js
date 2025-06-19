@@ -2,6 +2,7 @@ const Trip = require('../models/Trip');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const mongoose = require('mongoose');
+const { calculatePrice } = require('../utils/priceCalculator');
 
 /**
  * @swagger
@@ -84,7 +85,7 @@ const mongoose = require('mongoose');
  */
 // @desc    Create a new trip
 // @route   POST /api/trips
-// @access  Private (Driver)
+// Modify the createTrip function to correctly format coordinates
 exports.createTrip = async (req, res) => {
 	try {
 		const {
@@ -100,6 +101,71 @@ exports.createTrip = async (req, res) => {
 			estimatedArrivalTime,
 		} = req.body;
 
+		// Nếu giá không được cung cấp, tính tự động
+		let finalPrice = price;
+		if (finalPrice === undefined) {
+			// Lấy thông tin xe của người dùng
+			const user = await User.findById(req.user._id);
+			const vehicle = user.vehicle || {};
+
+			// Xác định loại phương tiện
+			let vehicleType = 'car'; // Mặc định
+			if (vehicle.brand) {
+				if (vehicle.seats <= 2) vehicleType = 'motorcycle';
+				else if (vehicle.seats > 5) vehicleType = 'suv';
+			}
+
+			// Tính giá tự động
+			const priceData = calculatePrice(
+				startLocation.coordinates,
+				endLocation.coordinates,
+				{
+					type: vehicleType,
+					year: vehicle.year || new Date().getFullYear() - 3,
+				},
+				departureTime
+			);
+
+			finalPrice = priceData.price;
+		}
+
+		// Format coordinates as GeoJSON points
+		if (startLocation && startLocation.coordinates) {
+			startLocation = {
+				...startLocation,
+				coordinates: {
+					lat: startLocation.coordinates.lat,
+					lng: startLocation.coordinates.lng,
+				},
+			};
+		}
+
+		if (endLocation && endLocation.coordinates) {
+			endLocation = {
+				...endLocation,
+				coordinates: {
+					lat: endLocation.coordinates.lat,
+					lng: endLocation.coordinates.lng,
+				},
+			};
+		}
+
+		// Format stops coordinates if present
+		if (stops && Array.isArray(stops)) {
+			stops = stops.map((stop) => {
+				if (stop.coordinates) {
+					return {
+						...stop,
+						coordinates: {
+							lat: stop.coordinates.lat,
+							lng: stop.coordinates.lng,
+						},
+					};
+				}
+				return stop;
+			});
+		}
+
 		// Create trip with driver as current user
 		const trip = await Trip.create({
 			driver: req.user._id,
@@ -109,7 +175,7 @@ exports.createTrip = async (req, res) => {
 			availableSeats,
 			notes,
 			stops: stops || [],
-			price: price || 0,
+			price: finalPrice,
 			currency: currency || 'VND',
 			recurring: recurring || { isRecurring: false },
 			estimatedArrivalTime,
@@ -120,6 +186,7 @@ exports.createTrip = async (req, res) => {
 			data: trip,
 		});
 	} catch (error) {
+		console.error('Create trip error:', error);
 		res.status(500).json({
 			success: false,
 			error: error.message,
@@ -1475,6 +1542,182 @@ exports.completeTrip = async (req, res) => {
 			data: trip,
 		});
 	} catch (error) {
+		res.status(500).json({
+			success: false,
+			error: error.message,
+		});
+	}
+};
+
+/**
+ * @swagger
+ * /trips/{id}/status:
+ *   patch:
+ *     summary: Update trip status
+ *     description: Update the status of a trip (driver only)
+ *     tags: [Trips]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Trip ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [scheduled, in_progress, completed, cancelled]
+ *     responses:
+ *       200:
+ *         description: Trip status updated
+ *       404:
+ *         description: Trip not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+// @desc    Update trip status
+// @route   PATCH /api/trips/:id/status
+// @access  Private (Driver only)
+exports.updateTripStatus = async (req, res) => {
+	try {
+		const { status } = req.body;
+
+		if (!status || !['scheduled', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+			return res.status(400).json({
+				success: false,
+				error: 'Please provide a valid status (scheduled, in_progress, completed, cancelled)',
+			});
+		}
+
+		const trip = await Trip.findById(req.params.id);
+
+		if (!trip) {
+			return res.status(404).json({
+				success: false,
+				error: 'Trip not found',
+			});
+		}
+
+		// Check if user is the trip driver
+		if (trip.driver.toString() !== req.user._id.toString()) {
+			return res.status(403).json({
+				success: false,
+				error: 'Not authorized to update this trip status',
+			});
+		}
+
+		// Status-specific validations
+		if (status === 'in_progress') {
+			if (trip.status !== 'scheduled') {
+				return res.status(400).json({
+					success: false,
+					error: 'Only scheduled trips can be started',
+				});
+			}
+			trip.actualDepartureTime = new Date();
+		} else if (status === 'completed') {
+			if (trip.status !== 'in_progress') {
+				return res.status(400).json({
+					success: false,
+					error: 'Only in-progress trips can be completed',
+				});
+			}
+			trip.actualArrivalTime = new Date();
+		} else if (status === 'cancelled') {
+			if (['completed', 'cancelled'].includes(trip.status)) {
+				return res.status(400).json({
+					success: false,
+					error: `Cannot cancel a ${trip.status} trip`,
+				});
+			}
+		}
+
+		trip.status = status;
+		await trip.save();
+
+		// Notify all passengers about the status change
+		if (trip.passengers && trip.passengers.length > 0) {
+			const acceptedPassengers = trip.passengers.filter((p) => p.status === 'accepted');
+
+			for (const passenger of acceptedPassengers) {
+				await Notification.create({
+					recipient: passenger.user,
+					title: `Trip ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+					message: `Your trip has been updated to ${status} status.`,
+					type: `trip_${status}`,
+					relatedId: trip._id,
+					relatedModel: 'Trip',
+				});
+			}
+		}
+
+		res.status(200).json({
+			success: true,
+			message: `Trip status updated to ${status}`,
+			data: trip,
+		});
+	} catch (error) {
+		console.error('❌ Update trip status error:', error);
+		res.status(500).json({
+			success: false,
+			error: error.message || 'Failed to update trip status',
+		});
+	}
+};
+
+// @desc    Estimate trip price
+// @route   POST /api/trips/estimate-price
+// @access  Private
+exports.estimatePrice = async (req, res) => {
+	try {
+		const { startLocation, endLocation, departureTime } = req.body;
+
+		// Lấy thông tin về xe từ người dùng
+		const user = await User.findById(req.user._id);
+		const vehicle = user.vehicle || {};
+
+		// Xác định loại phương tiện từ thông tin xe
+		let vehicleType = 'car'; // Mặc định
+		if (vehicle.brand) {
+			// Logic phân loại xe dựa trên thông tin
+			if (vehicle.seats <= 2) vehicleType = 'motorcycle';
+			else if (vehicle.seats > 5) vehicleType = 'suv';
+			// Có thể thêm logic xác định xe sang dựa vào brand
+		}
+
+		// Tính giá
+		const priceData = calculatePrice(
+			startLocation.coordinates,
+			endLocation.coordinates,
+			{
+				type: vehicleType,
+				year: vehicle.year || new Date().getFullYear() - 3,
+			},
+			departureTime
+		);
+
+		res.status(200).json({
+			success: true,
+			data: {
+				estimatedPrice: priceData.price,
+				currency: 'VND',
+				breakdown: priceData.breakdown,
+				distance: priceData.breakdown.distanceInKm,
+			},
+		});
+	} catch (error) {
+		console.error('Price estimation error:', error);
 		res.status(500).json({
 			success: false,
 			error: error.message,

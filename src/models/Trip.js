@@ -14,17 +14,14 @@ const tripSchema = new mongoose.Schema(
 				trim: true,
 			},
 			coordinates: {
-				lat: {
-					type: Number,
-					required: true,
-					min: -90,
-					max: 90,
+				type: {
+					type: String,
+					enum: ['Point'],
+					default: 'Point',
 				},
-				lng: {
-					type: Number,
+				coordinates: {
+					type: [Number], // [longitude, latitude]
 					required: true,
-					min: -180,
-					max: 180,
 				},
 			},
 		},
@@ -35,17 +32,14 @@ const tripSchema = new mongoose.Schema(
 				trim: true,
 			},
 			coordinates: {
-				lat: {
-					type: Number,
-					required: true,
-					min: -90,
-					max: 90,
+				type: {
+					type: String,
+					enum: ['Point'],
+					default: 'Point',
 				},
-				lng: {
-					type: Number,
+				coordinates: {
+					type: [Number], // [longitude, latitude]
 					required: true,
-					min: -180,
-					max: 180,
 				},
 			},
 		},
@@ -75,17 +69,14 @@ const tripSchema = new mongoose.Schema(
 					trim: true,
 				},
 				coordinates: {
-					lat: {
-						type: Number,
-						required: true,
-						min: -90,
-						max: 90,
+					type: {
+						type: String,
+						enum: ['Point'],
+						default: 'Point',
 					},
-					lng: {
-						type: Number,
+					coordinates: {
+						type: [Number], // [longitude, latitude]
 						required: true,
-						min: -180,
-						max: 180,
 					},
 				},
 				estimatedArrivalTime: {
@@ -185,8 +176,8 @@ const tripSchema = new mongoose.Schema(
 
 // Indexes for faster querying
 tripSchema.index({ driver: 1, departureTime: 1 });
-tripSchema.index({ 'startLocation.coordinates': '2dsphere' });
-tripSchema.index({ 'endLocation.coordinates': '2dsphere' });
+tripSchema.index({ 'startLocation.coordinates': 1 });
+tripSchema.index({ 'endLocation.coordinates': 1 });
 tripSchema.index({ status: 1 });
 tripSchema.index({ departureTime: 1 });
 tripSchema.index({ 'passengers.user': 1 });
