@@ -90,3 +90,88 @@ exports.optionalAuth = async (req, res, next) => {
 		next(error);
 	}
 };
+
+// Check if user has driver role
+exports.requireDriver = async (req, res, next) => {
+	try {
+		// This middleware should be used after protect middleware
+		if (!req.user) {
+			return res.status(401).json({
+				success: false,
+				error: 'Authentication required',
+			});
+		}
+
+		// Check if user is a driver
+		if (!['driver', 'both'].includes(req.user.role)) {
+			return res.status(403).json({
+				success: false,
+				error: 'Driver access required. Please register as a driver first.',
+			});
+		}
+
+		next();
+	} catch (error) {
+		console.error('Driver middleware error:', error);
+		res.status(500).json({
+			success: false,
+			error: 'Authorization failed',
+		});
+	}
+};
+
+// Check if user has passenger role
+exports.requirePassenger = async (req, res, next) => {
+	try {
+		if (!req.user) {
+			return res.status(401).json({
+				success: false,
+				error: 'Authentication required',
+			});
+		}
+
+		// Check if user is a passenger
+		if (!['passenger', 'both'].includes(req.user.role)) {
+			return res.status(403).json({
+				success: false,
+				error: 'Passenger access required.',
+			});
+		}
+
+		next();
+	} catch (error) {
+		console.error('Passenger middleware error:', error);
+		res.status(500).json({
+			success: false,
+			error: 'Authorization failed',
+		});
+	}
+};
+
+// Check if user has admin role
+exports.requireAdmin = async (req, res, next) => {
+	try {
+		if (!req.user) {
+			return res.status(401).json({
+				success: false,
+				error: 'Authentication required',
+			});
+		}
+
+		// Check if user is an admin
+		if (req.user.role !== 'admin') {
+			return res.status(403).json({
+				success: false,
+				error: 'Admin access required.',
+			});
+		}
+
+		next();
+	} catch (error) {
+		console.error('Admin middleware error:', error);
+		res.status(500).json({
+			success: false,
+			error: 'Authorization failed',
+		});
+	}
+};

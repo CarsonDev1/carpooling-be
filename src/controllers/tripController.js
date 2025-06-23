@@ -9,7 +9,7 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  * /trips:
  *   post:
  *     summary: Create a new trip
- *     description: Create a new trip as a driver
+ *     description: Create a new trip as a driver. Price is automatically calculated based on start and end coordinates.
  *     tags: [Trips]
  *     security:
  *       - bearerAuth: []
@@ -49,6 +49,7 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  *                 type: number
  *               price:
  *                 type: number
+ *                 description: "[DEPRECATED] Price is automatically calculated based on coordinates"
  *               currency:
  *                 type: string
  *                 default: VND
@@ -78,6 +79,38 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  *     responses:
  *       201:
  *         description: Trip created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   description: Created trip data
+ *                 pricing:
+ *                   type: object
+ *                   properties:
+ *                     calculatedPrice:
+ *                       type: number
+ *                       description: Automatically calculated price in VND
+ *                     breakdown:
+ *                       type: object
+ *                       properties:
+ *                         distanceInKm:
+ *                           type: number
+ *                         baseRate:
+ *                           type: number
+ *                         peakHourMultiplier:
+ *                           type: number
+ *                         qualityMultiplier:
+ *                           type: number
+ *                     vehicleType:
+ *                       type: string
+ *                       enum: [motorcycle, car, suv, luxury]
+ *                     currency:
+ *                       type: string
  *       401:
  *         description: Unauthorized
  *       500:
@@ -102,47 +135,44 @@ exports.createTrip = async (req, res) => {
 			vehicleType,
 		} = req.body;
 
-		// Nếu giá không được cung cấp, tính tự động
-		let finalPrice = price;
-		if (finalPrice === undefined) {
-			// Lấy thông tin xe của người dùng
-			const user = await User.findById(req.user._id);
-			const vehicle = user.vehicle || {};
+		// Lấy thông tin xe của người dùng
+		const user = await User.findById(req.user._id);
+		const vehicle = user.vehicle || {};
 
-			// Xác định loại phương tiện từ request hoặc từ thông tin xe
-			let finalVehicleType = vehicleType;
+		// Xác định loại phương tiện từ request hoặc từ thông tin xe
+		let finalVehicleType = vehicleType;
 
-			// Nếu không có vehicleType trong request, xác định từ thông tin xe
-			if (!finalVehicleType) {
-				if (vehicle.brand) {
-					// Logic phân loại xe dựa trên thông tin
-					if (vehicle.seats <= 2) finalVehicleType = 'motorcycle';
-					else if (vehicle.seats > 5) finalVehicleType = 'suv';
-					else finalVehicleType = 'car';
+		// Nếu không có vehicleType trong request, xác định từ thông tin xe
+		if (!finalVehicleType) {
+			if (vehicle.brand) {
+				// Logic phân loại xe dựa trên thông tin
+				if (vehicle.seats <= 2) finalVehicleType = 'motorcycle';
+				else if (vehicle.seats > 5) finalVehicleType = 'suv';
+				else finalVehicleType = 'car';
 
-					// Logic xác định xe sang dựa vào brand
-					const luxuryBrands = ['mercedes', 'bmw', 'audi', 'lexus'];
-					if (luxuryBrands.some((brand) => vehicle.brand.toLowerCase().includes(brand))) {
-						finalVehicleType = 'luxury';
-					}
-				} else {
-					finalVehicleType = 'car'; // Mặc định
+				// Logic xác định xe sang dựa vào brand
+				const luxuryBrands = ['mercedes', 'bmw', 'audi', 'lexus'];
+				if (luxuryBrands.some((brand) => vehicle.brand.toLowerCase().includes(brand))) {
+					finalVehicleType = 'luxury';
 				}
+			} else {
+				finalVehicleType = 'car'; // Mặc định
 			}
-
-			// Tính giá tự động
-			const priceData = calculatePrice(
-				startLocation.coordinates,
-				endLocation.coordinates,
-				{
-					type: finalVehicleType,
-					year: vehicle.year || new Date().getFullYear() - 3,
-				},
-				departureTime
-			);
-
-			finalPrice = priceData.price;
 		}
+
+		// Tính giá tự động dựa trên tọa độ
+		const priceData = calculatePrice(
+			startLocation.coordinates,
+			endLocation.coordinates,
+			{
+				type: finalVehicleType,
+				year: vehicle.year || new Date().getFullYear() - 3,
+			},
+			departureTime
+		);
+
+		// Sử dụng giá được tính tự động (bỏ qua price từ request)
+		const finalPrice = priceData.price;
 
 		// Format coordinates as GeoJSON points
 		if (startLocation && startLocation.coordinates) {
@@ -200,6 +230,12 @@ exports.createTrip = async (req, res) => {
 		res.status(201).json({
 			success: true,
 			data: trip,
+			pricing: {
+				calculatedPrice: finalPrice,
+				breakdown: priceData.breakdown,
+				vehicleType: finalVehicleType,
+				currency: currency || 'VND',
+			},
 		});
 	} catch (error) {
 		console.error('Create trip error:', error);

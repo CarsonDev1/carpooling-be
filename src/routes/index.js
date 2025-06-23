@@ -111,6 +111,22 @@ try {
 	});
 }
 
+// Import and mount driver routes
+try {
+	console.log('📝 Loading driver routes...');
+	const driverRoutes = require('./drivers');
+	router.use('/drivers', driverRoutes);
+	console.log('✅ Driver routes mounted at /drivers');
+} catch (error) {
+	console.error('❌ Failed to load driver routes:', error.message);
+	router.use('/drivers', (req, res) => {
+		res.status(500).json({
+			error: 'Driver routes loading failed',
+			message: error.message,
+		});
+	});
+}
+
 // Import and mount admin routes
 try {
 	console.log('📝 Loading admin routes...');
