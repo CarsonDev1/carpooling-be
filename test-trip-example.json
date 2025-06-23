@@ -1,0 +1,32 @@
+{
+	"startLocation": {
+		"address": "222 Nguyen Van Cu, Q6, TP HCM",
+		"coordinates": {
+			"lat": 10.7631,
+			"lng": 106.6814
+		}
+	},
+	"endLocation": {
+		"address": "Landmark 82, Vinhomes Central Park, TP HCM",
+		"coordinates": {
+			"lat": 10.7951,
+			"lng": 106.7218
+		}
+	},
+	"departureTime": "2024-12-01T08:00:00.000Z",
+	"estimatedArrivalTime": "2024-12-01T09:00:00.000Z",
+	"availableSeats": 3,
+	"notes": "Đi làm hàng ngày, có điều hòa",
+	"stops": [
+		{
+			"address": "Đại học Sài Gòn, Q5, TP HCM",
+			"coordinates": {
+				"lat": 10.7595,
+				"lng": 106.6782
+			}
+		}
+	],
+	"price": 50000,
+	"vehicleType": "car",
+	"currency": "VND"
+}

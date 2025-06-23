@@ -14,17 +14,21 @@ const tripSchema = new mongoose.Schema(
 				trim: true,
 			},
 			coordinates: {
-				lat: {
-					type: Number,
+				type: {
+					type: String,
+					enum: ['Point'],
+					default: 'Point',
 					required: true,
-					min: -90,
-					max: 90,
 				},
-				lng: {
-					type: Number,
+				coordinates: {
+					type: [Number],
 					required: true,
-					min: -180,
-					max: 180,
+					validate: {
+						validator: function (val) {
+							return val.length === 2 && val[0] >= -180 && val[0] <= 180 && val[1] >= -90 && val[1] <= 90;
+						},
+						message: 'Coordinates must be [longitude, latitude] with valid ranges',
+					},
 				},
 			},
 		},
@@ -35,17 +39,21 @@ const tripSchema = new mongoose.Schema(
 				trim: true,
 			},
 			coordinates: {
-				lat: {
-					type: Number,
+				type: {
+					type: String,
+					enum: ['Point'],
+					default: 'Point',
 					required: true,
-					min: -90,
-					max: 90,
 				},
-				lng: {
-					type: Number,
+				coordinates: {
+					type: [Number],
 					required: true,
-					min: -180,
-					max: 180,
+					validate: {
+						validator: function (val) {
+							return val.length === 2 && val[0] >= -180 && val[0] <= 180 && val[1] >= -90 && val[1] <= 90;
+						},
+						message: 'Coordinates must be [longitude, latitude] with valid ranges',
+					},
 				},
 			},
 		},
@@ -75,17 +83,23 @@ const tripSchema = new mongoose.Schema(
 					trim: true,
 				},
 				coordinates: {
-					lat: {
-						type: Number,
+					type: {
+						type: String,
+						enum: ['Point'],
+						default: 'Point',
 						required: true,
-						min: -90,
-						max: 90,
 					},
-					lng: {
-						type: Number,
+					coordinates: {
+						type: [Number],
 						required: true,
-						min: -180,
-						max: 180,
+						validate: {
+							validator: function (val) {
+								return (
+									val.length === 2 && val[0] >= -180 && val[0] <= 180 && val[1] >= -90 && val[1] <= 90
+								);
+							},
+							message: 'Coordinates must be [longitude, latitude] with valid ranges',
+						},
 					},
 				},
 				estimatedArrivalTime: {
@@ -128,8 +142,26 @@ const tripSchema = new mongoose.Schema(
 						trim: true,
 					},
 					coordinates: {
-						lat: Number,
-						lng: Number,
+						type: {
+							type: String,
+							enum: ['Point'],
+							default: 'Point',
+						},
+						coordinates: {
+							type: [Number],
+							validate: {
+								validator: function (val) {
+									return (
+										val.length === 2 &&
+										val[0] >= -180 &&
+										val[0] <= 180 &&
+										val[1] >= -90 &&
+										val[1] <= 90
+									);
+								},
+								message: 'Coordinates must be [longitude, latitude] with valid ranges',
+							},
+						},
 					},
 				},
 				dropoffLocation: {
@@ -138,8 +170,26 @@ const tripSchema = new mongoose.Schema(
 						trim: true,
 					},
 					coordinates: {
-						lat: Number,
-						lng: Number,
+						type: {
+							type: String,
+							enum: ['Point'],
+							default: 'Point',
+						},
+						coordinates: {
+							type: [Number],
+							validate: {
+								validator: function (val) {
+									return (
+										val.length === 2 &&
+										val[0] >= -180 &&
+										val[0] <= 180 &&
+										val[1] >= -90 &&
+										val[1] <= 90
+									);
+								},
+								message: 'Coordinates must be [longitude, latitude] with valid ranges',
+							},
+						},
 					},
 				},
 				requestedAt: {
@@ -191,8 +241,8 @@ const tripSchema = new mongoose.Schema(
 
 // Indexes for faster querying
 tripSchema.index({ driver: 1, departureTime: 1 });
-tripSchema.index({ 'startLocation.coordinates': 1 });
-tripSchema.index({ 'endLocation.coordinates': 1 });
+tripSchema.index({ 'startLocation.coordinates': '2dsphere' });
+tripSchema.index({ 'endLocation.coordinates': '2dsphere' });
 tripSchema.index({ status: 1 });
 tripSchema.index({ departureTime: 1 });
 tripSchema.index({ 'passengers.user': 1 });

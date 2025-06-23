@@ -88,7 +88,7 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
 // Modify the createTrip function to correctly format coordinates
 exports.createTrip = async (req, res) => {
 	try {
-		const {
+		let {
 			startLocation,
 			endLocation,
 			departureTime,
@@ -149,8 +149,8 @@ exports.createTrip = async (req, res) => {
 			startLocation = {
 				...startLocation,
 				coordinates: {
-					lat: startLocation.coordinates.lat,
-					lng: startLocation.coordinates.lng,
+					type: 'Point',
+					coordinates: [startLocation.coordinates.lng, startLocation.coordinates.lat], // [longitude, latitude]
 				},
 			};
 		}
@@ -159,8 +159,8 @@ exports.createTrip = async (req, res) => {
 			endLocation = {
 				...endLocation,
 				coordinates: {
-					lat: endLocation.coordinates.lat,
-					lng: endLocation.coordinates.lng,
+					type: 'Point',
+					coordinates: [endLocation.coordinates.lng, endLocation.coordinates.lat], // [longitude, latitude]
 				},
 			};
 		}
@@ -172,8 +172,8 @@ exports.createTrip = async (req, res) => {
 					return {
 						...stop,
 						coordinates: {
-							lat: stop.coordinates.lat,
-							lng: stop.coordinates.lng,
+							type: 'Point',
+							coordinates: [stop.coordinates.lng, stop.coordinates.lat], // [longitude, latitude]
 						},
 					};
 				}
