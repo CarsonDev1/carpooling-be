@@ -136,6 +136,15 @@ const tripSchema = new mongoose.Schema(
 					enum: ['pending', 'accepted', 'declined', 'cancelled'],
 					default: 'pending',
 				},
+				paymentStatus: {
+					type: String,
+					enum: ['not_required', 'pending', 'completed', 'failed'],
+					default: 'not_required',
+				},
+				paymentId: {
+					type: mongoose.Schema.Types.ObjectId,
+					ref: 'Payment',
+				},
 				pickupLocation: {
 					address: {
 						type: String,

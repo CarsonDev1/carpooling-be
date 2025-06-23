@@ -127,6 +127,22 @@ try {
 	});
 }
 
+// Import and mount payment routes
+try {
+	console.log('📝 Loading payment routes...');
+	const paymentRoutes = require('./payments');
+	router.use('/payments', paymentRoutes);
+	console.log('✅ Payment routes mounted at /payments');
+} catch (error) {
+	console.error('❌ Failed to load payment routes:', error.message);
+	router.use('/payments', (req, res) => {
+		res.status(500).json({
+			error: 'Payment routes loading failed',
+			message: error.message,
+		});
+	});
+}
+
 // Import and mount admin routes
 try {
 	console.log('📝 Loading admin routes...');
