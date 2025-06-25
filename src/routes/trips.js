@@ -26,15 +26,22 @@ router.get('/my-trips', tripController.getMyTrips);
 // Get trips joined by the current user (as passenger)
 router.get('/my-joined-trips', tripController.getMyJoinedTrips);
 
-// === DRIVER ONLY ROUTES ===
-// Create a new trip (driver only)
-router.post('/', requireDriver, tripController.createTrip);
+// === BOOKING REQUEST ROUTES ===
+// Create a booking request (any user can create)
+router.post('/', tripController.createTrip);
 
-// Update a trip (driver only)
+// Driver request to accept a booking
+router.post('/:id/driver-request', requireDriver, tripController.driverRequestBooking);
+
+// Passenger accept/decline driver requests
+router.patch('/:id/driver-requests/:requestId', tripController.respondToDriverRequest);
+
+// === DRIVER ONLY ROUTES (confirmed trips) ===
+// Update a trip (driver only, after confirmed)
 router.put('/:id', requireDriver, tripController.updateTrip);
 
-// Delete a trip (driver only)
-router.delete('/:id', requireDriver, tripController.deleteTrip);
+// Delete a trip (driver only, before confirmed)
+router.delete('/:id', tripController.deleteTrip); // Allow both passenger (if pending) and driver (if confirmed)
 
 // Cancel a trip (driver only)
 router.patch('/:id/cancel', requireDriver, tripController.cancelTrip);
@@ -42,14 +49,11 @@ router.patch('/:id/cancel', requireDriver, tripController.cancelTrip);
 // Update trip status (driver only)
 router.patch('/:id/status', requireDriver, tripController.updateTripStatus);
 
-// Accept or decline a passenger request (driver only)
-router.patch('/:id/passengers/:passengerId', requireDriver, tripController.updatePassengerStatus);
-
-// === PASSENGER ROUTES ===
-// Request to join a trip (any user can join as passenger)
+// === LEGACY PASSENGER ROUTES (for multi-passenger future) ===
+// Request to join a trip (for future multi-passenger support)
 router.post('/:id/join', tripController.joinTrip);
 
-// Cancel join request or leave a trip (any user)
+// Cancel join request or leave a trip
 router.delete('/:id/join', tripController.cancelJoinRequest);
 
 console.log('✅ Trip routes loaded successfully');

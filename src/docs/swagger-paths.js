@@ -420,8 +420,8 @@
  * @swagger
  * /trips:
  *   post:
- *     summary: Create a new trip
- *     description: Create a new trip as a driver. If price is not provided, it will be calculated automatically based on distance, vehicle information and time.
+ *     summary: Create a booking request
+ *     description: Create a new booking request as a passenger. Drivers can then respond to accept the booking. Price is estimated for reference only.
  *     tags: [Trips]
  *     security:
  *       - bearerAuth: []
@@ -431,16 +431,18 @@
  *         application/json:
  *           schema:
  *             type: object
- *             required: [startLocation, endLocation, departureTime, availableSeats]
+ *             required: [startLocation, endLocation, departureTime]
  *             properties:
  *               startLocation:
  *                 type: object
+ *                 required: [address, coordinates]
  *                 properties:
  *                   address:
  *                     type: string
  *                     example: "227 Nguyen Van Cu, Q5, TP HCM"
  *                   coordinates:
  *                     type: object
+ *                     required: [lat, lng]
  *                     properties:
  *                       lat:
  *                         type: number
@@ -450,12 +452,14 @@
  *                         example: 106.6814
  *               endLocation:
  *                 type: object
+ *                 required: [address, coordinates]
  *                 properties:
  *                   address:
  *                     type: string
  *                     example: "Landmark 81, Vinhomes Central Park, TP HCM"
  *                   coordinates:
  *                     type: object
+ *                     required: [lat, lng]
  *                     properties:
  *                       lat:
  *                         type: number
@@ -467,30 +471,39 @@
  *                 type: string
  *                 format: date-time
  *                 example: "2024-07-20T08:00:00Z"
+ *               preferredVehicleType:
+ *                 type: string
+ *                 enum: [motorcycle, car, suv, luxury]
+ *                 default: car
+ *                 description: Preferred vehicle type for the trip
+ *                 example: "car"
+ *               maxPrice:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Maximum price passenger is willing to pay (VND). If not provided, estimated price + 20% buffer is used
+ *                 example: 100000
+ *               availableSeats:
+ *                 type: number
+ *                 minimum: 1
+ *                 default: 1
+ *                 description: Number of seats needed
+ *                 example: 1
+ *               requestNote:
+ *                 type: string
+ *                 description: Special note or request from passenger
+ *                 example: "Cần đi gấp, tôi sẽ chờ ở tầng 1"
  *               estimatedArrivalTime:
  *                 type: string
  *                 format: date-time
  *                 example: "2024-07-20T09:00:00Z"
- *               availableSeats:
- *                 type: number
- *                 minimum: 1
- *                 example: 3
- *               price:
- *                 type: number
- *                 description: Optional. If not provided, price will be calculated automatically
- *                 example: 50000
- *               vehicleType:
- *                 type: string
- *                 enum: [motorcycle, car, suv, luxury]
- *                 description: Optional. Type of vehicle to use for price calculation. Will override user's vehicle information.
- *                 example: "car"
  *               currency:
  *                 type: string
  *                 default: "VND"
  *                 example: "VND"
  *               notes:
  *                 type: string
- *                 example: "Đi làm hàng ngày, có điều hòa"
+ *                 description: General notes about the trip
+ *                 example: "Cần xe có điều hòa"
  *               stops:
  *                 type: array
  *                 items:
@@ -516,14 +529,49 @@
  *                 properties:
  *                   isRecurring:
  *                     type: boolean
+ *                     default: false
  *                     example: false
  *                   pattern:
  *                     type: string
  *                     enum: [daily, weekdays, weekends, weekly]
  *                     example: "daily"
+ *                   endDate:
+ *                     type: string
+ *                     format: date-time
  *     responses:
  *       201:
- *         description: Trip created successfully
+ *         description: Booking request created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Booking request created successfully. Waiting for drivers to respond."
+ *                 data:
+ *                   type: object
+ *                   description: Created booking request
+ *                 pricing:
+ *                   type: object
+ *                   properties:
+ *                     estimatedPrice:
+ *                       type: number
+ *                       example: 85000
+ *                     maxPrice:
+ *                       type: number
+ *                       example: 100000
+ *                     breakdown:
+ *                       type: object
+ *                     preferredVehicleType:
+ *                       type: string
+ *                       example: "car"
+ *                     currency:
+ *                       type: string
+ *                       example: "VND"
  *       401:
  *         description: Unauthorized
  *       500:
@@ -587,6 +635,100 @@
  *                         icon:
  *                           type: string
  *                           example: "car"
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * /trips/{id}/driver-request:
+ *   post:
+ *     summary: Driver request to accept a booking
+ *     description: Driver submits a request to accept a passenger's booking with proposed price
+ *     tags: [Trips]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Trip/Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [proposedPrice]
+ *             properties:
+ *               proposedPrice:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Price proposed by driver (in VND)
+ *                 example: 95000
+ *               message:
+ *                 type: string
+ *                 description: Optional message from driver to passenger
+ *                 example: "Tôi có thể đón bạn đúng giờ, xe Honda City mới"
+ *     responses:
+ *       200:
+ *         description: Driver request submitted successfully
+ *       400:
+ *         description: Bad request (already requested, price too high, etc.)
+ *       403:
+ *         description: Not authorized (not a driver or vehicle info incomplete)
+ *       404:
+ *         description: Booking request not found
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * /trips/{id}/driver-requests/{requestId}:
+ *   patch:
+ *     summary: Passenger respond to driver request
+ *     description: Passenger accepts or declines a driver's request to take their booking
+ *     tags: [Trips]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Trip/Booking ID
+ *       - in: path
+ *         name: requestId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Driver request ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [accept, decline]
+ *                 description: Action to take on the driver request
+ *                 example: "accept"
+ *     responses:
+ *       200:
+ *         description: Driver request response processed successfully
+ *       400:
+ *         description: Bad request (invalid action, already responded, etc.)
+ *       403:
+ *         description: Not authorized (not the trip requester)
+ *       404:
+ *         description: Trip or driver request not found
  *       500:
  *         description: Server error
  */

@@ -2,10 +2,17 @@ const mongoose = require('mongoose');
 
 const tripSchema = new mongoose.Schema(
 	{
-		driver: {
+		// Người tạo yêu cầu đặt xe (passenger)
+		requestedBy: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: 'User',
 			required: true,
+		},
+		// Tài xế (sẽ được assign sau khi accept)
+		driver: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'User',
+			default: null,
 		},
 		startLocation: {
 			address: {
@@ -112,18 +119,63 @@ const tripSchema = new mongoose.Schema(
 			default: 0,
 			min: 0,
 		},
-		// Lưu loại xe được sử dụng cho chuyến đi (dùng cho tính giá)
-		vehicleTypeUsed: {
+		// Loại xe passenger mong muốn
+		preferredVehicleType: {
 			type: String,
 			enum: ['motorcycle', 'car', 'suv', 'luxury'],
 			default: 'car',
+		},
+		// Loại xe thực tế của driver (sau khi accept)
+		vehicleTypeUsed: {
+			type: String,
+			enum: ['motorcycle', 'car', 'suv', 'luxury'],
+		},
+		// Giá tối đa passenger chấp nhận
+		maxPrice: {
+			type: Number,
+			min: 0,
+		},
+		// Ghi chú từ passenger
+		requestNote: {
+			type: String,
+			trim: true,
 		},
 		currency: {
 			type: String,
 			default: 'VND',
 			uppercase: true,
 		},
-		// List of passengers
+		// Danh sách drivers request accept booking này
+		driverRequests: [
+			{
+				driver: {
+					type: mongoose.Schema.Types.ObjectId,
+					ref: 'User',
+					required: true,
+				},
+				status: {
+					type: String,
+					enum: ['pending', 'accepted', 'declined'],
+					default: 'pending',
+				},
+				proposedPrice: {
+					type: Number,
+					min: 0,
+				},
+				message: {
+					type: String,
+					trim: true,
+				},
+				requestedAt: {
+					type: Date,
+					default: Date.now,
+				},
+				respondedAt: {
+					type: Date,
+				},
+			},
+		],
+		// List of passengers (giữ lại cho tương lai nếu muốn multi-passenger)
 		passengers: [
 			{
 				user: {
@@ -212,8 +264,8 @@ const tripSchema = new mongoose.Schema(
 		],
 		status: {
 			type: String,
-			enum: ['scheduled', 'in_progress', 'completed', 'cancelled'],
-			default: 'scheduled',
+			enum: ['pending_driver', 'confirmed', 'paid', 'in_progress', 'completed', 'cancelled'],
+			default: 'pending_driver',
 		},
 		// For recurring trips
 		recurring: {
@@ -233,6 +285,13 @@ const tripSchema = new mongoose.Schema(
 		cancellationReason: {
 			type: String,
 		},
+		// Timestamps quan trọng
+		confirmedAt: {
+			type: Date, // Khi driver accept
+		},
+		paidAt: {
+			type: Date, // Khi payment hoàn thành
+		},
 		// To track trip progress
 		actualDepartureTime: {
 			type: Date,
@@ -249,12 +308,15 @@ const tripSchema = new mongoose.Schema(
 );
 
 // Indexes for faster querying
+tripSchema.index({ requestedBy: 1, departureTime: 1 });
 tripSchema.index({ driver: 1, departureTime: 1 });
 tripSchema.index({ 'startLocation.coordinates': '2dsphere' });
 tripSchema.index({ 'endLocation.coordinates': '2dsphere' });
 tripSchema.index({ status: 1 });
 tripSchema.index({ departureTime: 1 });
+tripSchema.index({ 'driverRequests.driver': 1 });
 tripSchema.index({ 'passengers.user': 1 });
+tripSchema.index({ status: 1, departureTime: 1 }); // For driver finding trips
 
 // Virtual for total passenger count
 tripSchema.virtual('passengerCount').get(function () {
@@ -265,6 +327,16 @@ tripSchema.virtual('passengerCount').get(function () {
 tripSchema.virtual('isFull').get(function () {
 	const acceptedPassengers = this.passengers.filter((p) => p.status === 'accepted').length;
 	return acceptedPassengers >= this.availableSeats;
+});
+
+// Virtual để check xem có driver requests pending không
+tripSchema.virtual('hasPendingDriverRequests').get(function () {
+	return this.driverRequests.some((req) => req.status === 'pending');
+});
+
+// Virtual để lấy accepted driver request
+tripSchema.virtual('acceptedDriverRequest').get(function () {
+	return this.driverRequests.find((req) => req.status === 'accepted');
 });
 
 module.exports = mongoose.model('Trip', tripSchema);

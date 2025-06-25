@@ -48,19 +48,35 @@ exports.createPayment = async (req, res) => {
 		const userId = req.user._id;
 
 		// Tìm trip
-		const trip = await Trip.findById(tripId).populate('driver', 'fullName');
+		const trip = await Trip.findById(tripId).populate('driver', 'fullName').populate('requestedBy', 'fullName');
 		if (!trip) {
 			return res.status(404).json({
 				success: false,
-				error: 'Trip not found',
+				error: 'Booking request not found',
 			});
 		}
 
-		// Kiểm tra user không phải là driver của trip này
-		if (trip.driver._id.toString() === userId.toString()) {
+		// Kiểm tra trip đã có driver confirm chưa
+		if (trip.status !== 'confirmed') {
 			return res.status(400).json({
 				success: false,
-				error: 'Driver cannot pay for their own trip',
+				error: 'Payment can only be made after driver has accepted the booking',
+			});
+		}
+
+		// Kiểm tra user phải là người tạo booking request
+		if (trip.requestedBy._id.toString() !== userId.toString()) {
+			return res.status(403).json({
+				success: false,
+				error: 'Only the trip requester can make payment',
+			});
+		}
+
+		// Kiểm tra trip chưa được thanh toán
+		if (trip.status === 'paid') {
+			return res.status(400).json({
+				success: false,
+				error: 'Trip has already been paid for',
 			});
 		}
 
@@ -84,15 +100,6 @@ exports.createPayment = async (req, res) => {
 					error: 'You have a pending payment for this trip',
 				});
 			}
-		}
-
-		// Kiểm tra trip còn chỗ không
-		const acceptedPassengers = trip.passengers.filter((p) => p.status === 'accepted').length;
-		if (acceptedPassengers >= trip.availableSeats) {
-			return res.status(400).json({
-				success: false,
-				error: 'Trip is full',
-			});
 		}
 
 		// Tạo payment record
@@ -207,28 +214,11 @@ exports.vnpayReturn = async (req, res) => {
 			// Payment thành công
 			await payment.markAsCompleted(vnpayData.rawData);
 
-			// Tự động thêm user vào trip như một passenger được accept
+			// Cập nhật trip status thành 'paid' và thời gian thanh toán
 			const trip = payment.trip;
-			const existingPassenger = trip.passengers.find((p) => p.user.toString() === payment.user._id.toString());
-
-			if (!existingPassenger) {
-				trip.passengers.push({
-					user: payment.user._id,
-					status: 'accepted', // Tự động accept sau khi thanh toán thành công
-					paymentStatus: 'completed',
-					paymentId: payment._id,
-					requestedAt: new Date(),
-					updatedAt: new Date(),
-				});
-				await trip.save();
-			} else {
-				// Cập nhật payment status cho passenger đã tồn tại
-				existingPassenger.status = 'accepted';
-				existingPassenger.paymentStatus = 'completed';
-				existingPassenger.paymentId = payment._id;
-				existingPassenger.updatedAt = new Date();
-				await trip.save();
-			}
+			trip.status = 'paid';
+			trip.paidAt = new Date();
+			await trip.save();
 
 			// Redirect về frontend với thông tin thành công
 			const redirectUrl = new URL(vnpayConfig.vnp_FrontendReturnUrl);

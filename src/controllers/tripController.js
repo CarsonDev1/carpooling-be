@@ -8,8 +8,8 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  * @swagger
  * /trips:
  *   post:
- *     summary: Create a new trip
- *     description: Create a new trip as a driver. Price is automatically calculated based on start and end coordinates.
+ *     summary: Create a booking request
+ *     description: Create a new booking request as a passenger. Drivers can then respond to accept the booking. Price is estimated for reference.
  *     tags: [Trips]
  *     security:
  *       - bearerAuth: []
@@ -19,42 +19,72 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  *         application/json:
  *           schema:
  *             type: object
- *             required: [startLocation, endLocation, departureTime, availableSeats]
+ *             required: [startLocation, endLocation, departureTime]
  *             properties:
  *               startLocation:
  *                 type: object
+ *                 required: [address, coordinates]
  *                 properties:
  *                   address:
  *                     type: string
+ *                     example: "123 Nguyễn Huệ, Q1, HCM"
  *                   coordinates:
- *                     type: array
- *                     items:
- *                       type: number
+ *                     type: object
+ *                     properties:
+ *                       lat:
+ *                         type: number
+ *                         example: 10.7769
+ *                       lng:
+ *                         type: number
+ *                         example: 106.7009
  *               endLocation:
  *                 type: object
+ *                 required: [address, coordinates]
  *                 properties:
  *                   address:
  *                     type: string
+ *                     example: "456 Lê Lợi, Q3, HCM"
  *                   coordinates:
- *                     type: array
- *                     items:
- *                       type: number
+ *                     type: object
+ *                     properties:
+ *                       lat:
+ *                         type: number
+ *                         example: 10.7851
+ *                       lng:
+ *                         type: number
+ *                         example: 106.7085
  *               departureTime:
  *                 type: string
  *                 format: date-time
+ *                 example: "2024-01-15T08:00:00.000Z"
+ *               preferredVehicleType:
+ *                 type: string
+ *                 enum: [motorcycle, car, suv, luxury]
+ *                 default: car
+ *                 description: Preferred vehicle type for the trip
+ *               maxPrice:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Maximum price passenger is willing to pay (VND). If not provided, estimated price + 20% buffer is used
+ *                 example: 100000
+ *               availableSeats:
+ *                 type: number
+ *                 minimum: 1
+ *                 default: 1
+ *                 description: Number of seats needed
+ *               requestNote:
+ *                 type: string
+ *                 description: Special note or request from passenger
+ *                 example: "Cần đi gấp, tôi sẽ chờ ở tầng 1"
  *               estimatedArrivalTime:
  *                 type: string
  *                 format: date-time
- *               availableSeats:
- *                 type: number
- *               price:
- *                 type: number
- *                 description: "[DEPRECATED] Price is automatically calculated based on coordinates"
  *               currency:
  *                 type: string
  *                 default: VND
  *               notes:
  *                 type: string
+ *                 description: General notes about the trip
  *               stops:
  *                 type: array
  *                 items:
@@ -63,22 +93,27 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  *                     address:
  *                       type: string
  *                     coordinates:
- *                       type: array
- *                       items:
- *                         type: number
+ *                       type: object
+ *                       properties:
+ *                         lat:
+ *                           type: number
+ *                         lng:
+ *                           type: number
  *               recurring:
  *                 type: object
  *                 properties:
  *                   isRecurring:
  *                     type: boolean
- *                   days:
- *                     type: array
- *                     items:
- *                       type: string
- *                       enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+ *                     default: false
+ *                   pattern:
+ *                     type: string
+ *                     enum: [daily, weekdays, weekends, weekly]
+ *                   endDate:
+ *                     type: string
+ *                     format: date-time
  *     responses:
  *       201:
- *         description: Trip created successfully
+ *         description: Booking request created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -86,15 +121,46 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Booking request created successfully. Waiting for drivers to respond."
  *                 data:
  *                   type: object
- *                   description: Created trip data
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                       example: "pending_driver"
+ *                     requestedBy:
+ *                       type: string
+ *                     driver:
+ *                       type: string
+ *                       nullable: true
+ *                       example: null
+ *                     startLocation:
+ *                       type: object
+ *                     endLocation:
+ *                       type: object
+ *                     departureTime:
+ *                       type: string
+ *                       format: date-time
+ *                     preferredVehicleType:
+ *                       type: string
+ *                     maxPrice:
+ *                       type: number
  *                 pricing:
  *                   type: object
  *                   properties:
- *                     calculatedPrice:
+ *                     estimatedPrice:
  *                       type: number
- *                       description: Automatically calculated price in VND
+ *                       description: Estimated price based on preferred vehicle type
+ *                       example: 85000
+ *                     maxPrice:
+ *                       type: number
+ *                       description: Maximum price passenger will pay
+ *                       example: 100000
  *                     breakdown:
  *                       type: object
  *                       properties:
@@ -106,19 +172,20 @@ const { calculatePrice, VEHICLE_TYPES } = require('../utils/priceCalculator');
  *                           type: number
  *                         qualityMultiplier:
  *                           type: number
- *                     vehicleType:
+ *                     preferredVehicleType:
  *                       type: string
- *                       enum: [motorcycle, car, suv, luxury]
+ *                       example: "car"
  *                     currency:
  *                       type: string
+ *                       example: "VND"
  *       401:
  *         description: Unauthorized
  *       500:
  *         description: Server error
  */
-// @desc    Create a new trip
+// @desc    Create a booking request (passenger creates trip request)
 // @route   POST /api/trips
-// Modify the createTrip function to correctly format coordinates
+// @access  Private (Any user can create booking request)
 exports.createTrip = async (req, res) => {
 	try {
 		let {
@@ -128,51 +195,30 @@ exports.createTrip = async (req, res) => {
 			availableSeats,
 			notes,
 			stops,
-			price,
+			preferredVehicleType,
+			maxPrice,
+			requestNote,
 			currency,
 			recurring,
 			estimatedArrivalTime,
-			vehicleType,
 		} = req.body;
 
-		// Lấy thông tin xe của người dùng
-		const user = await User.findById(req.user._id);
-		const vehicle = user.vehicle || {};
-
-		// Xác định loại phương tiện từ request hoặc từ thông tin xe
-		let finalVehicleType = vehicleType;
-
-		// Nếu không có vehicleType trong request, xác định từ thông tin xe
-		if (!finalVehicleType) {
-			if (vehicle.brand) {
-				// Logic phân loại xe dựa trên thông tin
-				if (vehicle.seats <= 2) finalVehicleType = 'motorcycle';
-				else if (vehicle.seats > 5) finalVehicleType = 'suv';
-				else finalVehicleType = 'car';
-
-				// Logic xác định xe sang dựa vào brand
-				const luxuryBrands = ['mercedes', 'bmw', 'audi', 'lexus'];
-				if (luxuryBrands.some((brand) => vehicle.brand.toLowerCase().includes(brand))) {
-					finalVehicleType = 'luxury';
-				}
-			} else {
-				finalVehicleType = 'car'; // Mặc định
-			}
-		}
-
-		// Tính giá tự động dựa trên tọa độ
-		const priceData = calculatePrice(
+		// Tính giá ước tính dựa trên loại xe passenger mong muốn
+		const estimatedPriceData = calculatePrice(
 			startLocation.coordinates,
 			endLocation.coordinates,
 			{
-				type: finalVehicleType,
-				year: vehicle.year || new Date().getFullYear() - 3,
+				type: preferredVehicleType || 'car',
+				year: new Date().getFullYear() - 3, // Giả định xe 3 năm tuổi
 			},
 			departureTime
 		);
 
-		// Sử dụng giá được tính tự động (bỏ qua price từ request)
-		const finalPrice = priceData.price;
+		// Giá ước tính cho passenger tham khảo
+		const estimatedPrice = estimatedPriceData.price;
+
+		// Nếu passenger không set maxPrice, dùng giá ước tính + 20% buffer
+		const finalMaxPrice = maxPrice || Math.ceil(estimatedPrice * 1.2);
 
 		// Format coordinates as GeoJSON points
 		if (startLocation && startLocation.coordinates) {
@@ -211,29 +257,44 @@ exports.createTrip = async (req, res) => {
 			});
 		}
 
-		// Create trip with driver as current user
+		// Create booking request
 		const trip = await Trip.create({
-			driver: req.user._id,
+			requestedBy: req.user._id,
+			driver: null, // Chưa có driver
 			startLocation,
 			endLocation,
 			departureTime,
-			availableSeats,
+			availableSeats: availableSeats || 1, // Mặc định 1 chỗ
 			notes,
 			stops: stops || [],
-			price: finalPrice,
+			preferredVehicleType: preferredVehicleType || 'car',
+			maxPrice: finalMaxPrice,
+			requestNote,
+			price: 0, // Sẽ được set khi driver accept
 			currency: currency || 'VND',
 			recurring: recurring || { isRecurring: false },
 			estimatedArrivalTime,
-			vehicleTypeUsed: vehicleType,
+			status: 'pending_driver',
+		});
+
+		// Debug logging
+		console.log('✅ Trip Created:', {
+			tripId: trip._id,
+			status: trip.status,
+			requestedBy: trip.requestedBy,
+			departureTime: trip.departureTime,
+			preferredVehicleType: trip.preferredVehicleType,
 		});
 
 		res.status(201).json({
 			success: true,
+			message: 'Booking request created successfully. Waiting for drivers to respond.',
 			data: trip,
 			pricing: {
-				calculatedPrice: finalPrice,
-				breakdown: priceData.breakdown,
-				vehicleType: finalVehicleType,
+				estimatedPrice,
+				maxPrice: finalMaxPrice,
+				breakdown: estimatedPriceData.breakdown,
+				preferredVehicleType: preferredVehicleType || 'car',
 				currency: currency || 'VND',
 			},
 		});
@@ -250,12 +311,25 @@ exports.createTrip = async (req, res) => {
  * @swagger
  * /trips:
  *   get:
- *     summary: Get all trips
- *     description: Get all trips with filtering options
+ *     summary: Get trips based on user role
+ *     description: |
+ *       Get trips with role-based filtering:
+ *       - For passengers (role=passenger): Returns their own booking requests
+ *       - For drivers (role=driver): Returns available booking requests that need drivers
  *     tags: [Trips]
  *     security:
  *       - bearerAuth: []
  *     parameters:
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [passenger, driver]
+ *           default: passenger
+ *         description: |
+ *           Filter trips based on user role:
+ *           - passenger: Show user's own booking requests
+ *           - driver: Show available booking requests to accept
  *       - in: query
  *         name: status
  *         schema:
@@ -332,15 +406,33 @@ exports.createTrip = async (req, res) => {
  *       500:
  *         description: Server error
  */
-// @desc    Get all trips
+// @desc    Get trips (for passengers: their requests, for drivers: available requests)
 // @route   GET /api/trips
 // @access  Private
 exports.getTrips = async (req, res) => {
 	try {
-		// Build query based on filters
+		// Build query based on filters and user role
 		const query = {};
 
-		// Filter by status
+		// If user is passenger, show their own booking requests by default
+		// If user is driver, show available booking requests by default
+		const userRole = req.query.role || 'passenger';
+
+		if (userRole === 'passenger') {
+			// Show passenger's own booking requests (support both old and new schema)
+			query.$or = [
+				{ requestedBy: req.user._id }, // New schema
+				{ driver: req.user._id, passengers: { $size: 0 } }, // Old schema - trips user created as driver
+			];
+		} else if (userRole === 'driver') {
+			// Show available booking requests that need drivers (support both schemas)
+			query.$or = [
+				{ status: { $in: ['pending_driver'] } }, // New schema - pending requests
+				{ status: 'scheduled', driver: { $ne: req.user._id } }, // Old schema - scheduled trips by others
+			];
+		}
+
+		// Filter by status (override role-based status if explicitly provided)
 		if (req.query.status) {
 			query.status = req.query.status;
 		}
@@ -392,9 +484,64 @@ exports.getTrips = async (req, res) => {
 		// Combine filters
 		const finalQuery = { ...query, ...locationQuery };
 
-		// Only get future trips by default
-		if (!req.query.includePast) {
-			finalQuery.departureTime = { $gte: new Date() };
+		// Only get future trips by default (unless explicitly including past trips)
+		// TEMPORARILY DISABLED for debugging - include all trips regardless of time
+		// if (!req.query.includePast) {
+		// 	// Merge with existing departureTime query if any
+		// 	finalQuery.departureTime = {
+		// 		...finalQuery.departureTime,
+		// 		$gte: new Date(),
+		// 	};
+		// }
+
+		// Debug logging
+		console.log('🔍 getTrips Debug:', {
+			userRole,
+			userId: req.user._id,
+			baseQuery: query,
+			finalQuery,
+			queryParams: req.query,
+		});
+
+		// Additional logging for debugging old vs new data
+		const allTrips = await Trip.find({}).limit(3);
+		console.log('📊 Sample trips in DB:');
+		allTrips.forEach((t, i) => {
+			console.log(`  ${i + 1}. ID: ${t._id}`);
+			console.log(`     Status: ${t.status}`);
+			console.log(`     Driver: ${t.driver || 'null'}`);
+			console.log(`     RequestedBy: ${t.requestedBy || 'null'}`);
+			console.log(`     DepartureTime: ${t.departureTime}`);
+			console.log(`     CreatedAt: ${t.createdAt}`);
+			console.log('     ---');
+		});
+
+		const totalCount = await Trip.countDocuments({});
+		console.log('📈 Total trips in DB:', totalCount);
+
+		// Test the exact query being used
+		console.log('🔍 Testing query step by step:');
+
+		// Test without departureTime filter
+		const queryWithoutTime = { ...finalQuery };
+		delete queryWithoutTime.departureTime;
+		const countWithoutTime = await Trip.countDocuments(queryWithoutTime);
+		console.log(`  Without time filter: ${countWithoutTime} trips`);
+
+		// Test with original query
+		const countWithTime = await Trip.countDocuments(finalQuery);
+		console.log(`  With time filter: ${countWithTime} trips`);
+
+		// Show current time for comparison
+		console.log(`  Current time: ${new Date()}`);
+
+		// Test scheduled trips specifically for drivers
+		if (userRole === 'driver') {
+			const scheduledCount = await Trip.countDocuments({
+				status: 'scheduled',
+				driver: { $ne: req.user._id },
+			});
+			console.log(`  Scheduled trips (not by user): ${scheduledCount}`);
 		}
 
 		// Sort options
@@ -427,8 +574,16 @@ exports.getTrips = async (req, res) => {
 
 		const trips = await Trip.find(finalQuery)
 			.populate({
-				path: 'driver',
+				path: 'requestedBy',
 				select: 'fullName avatar rating phone',
+			})
+			.populate({
+				path: 'driver',
+				select: 'fullName avatar rating vehicle phone',
+			})
+			.populate({
+				path: 'driverRequests.driver',
+				select: 'fullName avatar rating vehicle phone',
 			})
 			.sort(sort)
 			.skip(startIndex)
@@ -488,7 +643,15 @@ exports.getTrip = async (req, res) => {
 	try {
 		const trip = await Trip.findById(req.params.id)
 			.populate({
+				path: 'requestedBy',
+				select: 'fullName avatar rating phone',
+			})
+			.populate({
 				path: 'driver',
+				select: 'fullName avatar rating vehicle phone',
+			})
+			.populate({
+				path: 'driverRequests.driver',
 				select: 'fullName avatar rating vehicle phone',
 			})
 			.populate({
@@ -580,11 +743,29 @@ exports.updateTrip = async (req, res) => {
 			});
 		}
 
-		// Check if user is the trip driver
-		if (trip.driver.toString() !== req.user._id.toString()) {
+		// Check if user is authorized (trip requester if pending, or driver if confirmed)
+		const isRequester = trip.requestedBy && trip.requestedBy.toString() === req.user._id.toString();
+		const isDriver = trip.driver && trip.driver.toString() === req.user._id.toString();
+
+		if (!isRequester && !isDriver) {
 			return res.status(403).json({
 				success: false,
 				error: 'Not authorized to update this trip',
+			});
+		}
+
+		// Only requesters can update pending trips, only drivers can update confirmed+ trips
+		if (trip.status === 'pending_driver' && !isRequester) {
+			return res.status(403).json({
+				success: false,
+				error: 'Only trip requester can update pending trips',
+			});
+		}
+
+		if (['confirmed', 'paid', 'in_progress'].includes(trip.status) && !isDriver) {
+			return res.status(403).json({
+				success: false,
+				error: 'Only assigned driver can update confirmed trips',
 			});
 		}
 
@@ -672,21 +853,34 @@ exports.deleteTrip = async (req, res) => {
 			});
 		}
 
-		// Check if user is the trip driver
-		if (trip.driver.toString() !== req.user._id.toString()) {
+		// Check if user is authorized (trip requester if pending, or driver if confirmed but not paid)
+		const isRequester = trip.requestedBy && trip.requestedBy.toString() === req.user._id.toString();
+		const isDriver = trip.driver && trip.driver.toString() === req.user._id.toString();
+
+		if (!isRequester && !isDriver) {
 			return res.status(403).json({
 				success: false,
 				error: 'Not authorized to delete this trip',
 			});
 		}
 
-		// Only allow deletion if no passengers have been accepted
-		const hasAcceptedPassengers = trip.passengers.some((p) => p.status === 'accepted');
-
-		if (hasAcceptedPassengers) {
+		// Deletion rules based on trip status
+		if (trip.status === 'pending_driver') {
+			// Only requester can delete pending trips
+			if (!isRequester) {
+				return res.status(403).json({
+					success: false,
+					error: 'Only trip requester can delete pending trips',
+				});
+			}
+		} else if (trip.status === 'confirmed') {
+			// Either requester or driver can delete confirmed but unpaid trips
+			// No additional check needed
+		} else if (['paid', 'in_progress', 'completed'].includes(trip.status)) {
+			// Cannot delete paid or active trips, must cancel instead
 			return res.status(400).json({
 				success: false,
-				error: 'Cannot delete trip with accepted passengers. Cancel it instead.',
+				error: 'Cannot delete paid trips. Cancel it instead.',
 			});
 		}
 
@@ -1801,6 +1995,393 @@ exports.getVehicleTypes = async (req, res) => {
 		});
 	} catch (error) {
 		console.error('Get vehicle types error:', error);
+		res.status(500).json({
+			success: false,
+			error: error.message,
+		});
+	}
+};
+
+/**
+ * @swagger
+ * /trips/{id}/driver-request:
+ *   post:
+ *     summary: Driver request to accept a booking
+ *     description: Driver submits a request to accept a passenger's booking with proposed price
+ *     tags: [Trips]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Trip/Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [proposedPrice]
+ *             properties:
+ *               proposedPrice:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Price proposed by driver (in VND)
+ *                 example: 95000
+ *               message:
+ *                 type: string
+ *                 description: Optional message from driver to passenger
+ *                 example: "Tôi có thể đón bạn đúng giờ, xe Honda City mới"
+ *     responses:
+ *       200:
+ *         description: Driver request submitted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Driver request submitted successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     tripId:
+ *                       type: string
+ *                     request:
+ *                       type: object
+ *                       properties:
+ *                         driver:
+ *                           type: object
+ *                           properties:
+ *                             fullName:
+ *                               type: string
+ *                             vehicle:
+ *                               type: object
+ *                             rating:
+ *                               type: number
+ *                         proposedPrice:
+ *                           type: number
+ *                         message:
+ *                           type: string
+ *                         status:
+ *                           type: string
+ *                           example: "pending"
+ *       400:
+ *         description: Bad request (already requested, price too high, etc.)
+ *       403:
+ *         description: Not authorized (not a driver or vehicle info incomplete)
+ *       404:
+ *         description: Booking request not found
+ *       500:
+ *         description: Server error
+ */
+// @desc    Driver request to accept a booking
+// @route   POST /api/trips/:id/driver-request
+// @access  Private (Driver only)
+exports.driverRequestBooking = async (req, res) => {
+	try {
+		const { proposedPrice, message } = req.body;
+		const tripId = req.params.id;
+		const driverId = req.user._id;
+
+		// Find the trip
+		const trip = await Trip.findById(tripId);
+		if (!trip) {
+			return res.status(404).json({
+				success: false,
+				error: 'Booking request not found',
+			});
+		}
+
+		// Check if trip is still pending driver
+		if (trip.status !== 'pending_driver') {
+			return res.status(400).json({
+				success: false,
+				error: 'This booking request is no longer available',
+			});
+		}
+
+		// Check if driver already requested this booking
+		const existingRequest = trip.driverRequests.find((req) => req.driver.toString() === driverId.toString());
+
+		if (existingRequest) {
+			return res.status(400).json({
+				success: false,
+				error: 'You have already requested this booking',
+			});
+		}
+
+		// Check if driver has vehicle info
+		const driver = await User.findById(driverId);
+		if (!['driver', 'both'].includes(driver.role)) {
+			return res.status(403).json({
+				success: false,
+				error: 'Only registered drivers can request bookings',
+			});
+		}
+
+		if (!driver.vehicle || !driver.vehicle.licensePlate) {
+			return res.status(400).json({
+				success: false,
+				error: 'Please complete your vehicle information first',
+			});
+		}
+
+		// Check if proposed price is within passenger's budget
+		if (trip.maxPrice && proposedPrice > trip.maxPrice) {
+			return res.status(400).json({
+				success: false,
+				error: `Proposed price exceeds passenger's maximum budget of ${trip.maxPrice} VND`,
+			});
+		}
+
+		// Add driver request
+		trip.driverRequests.push({
+			driver: driverId,
+			proposedPrice,
+			message,
+			status: 'pending',
+		});
+
+		await trip.save();
+
+		// Populate the new request for response
+		await trip.populate('driverRequests.driver', 'fullName avatar rating vehicle');
+
+		// Get the newly added request
+		const newRequest = trip.driverRequests[trip.driverRequests.length - 1];
+
+		res.status(200).json({
+			success: true,
+			message: 'Driver request submitted successfully',
+			data: {
+				tripId: trip._id.toString(), // ← Convert ObjectId to string
+				request: newRequest,
+			},
+		});
+	} catch (error) {
+		console.error('Driver request booking error:', error);
+		res.status(500).json({
+			success: false,
+			error: error.message,
+		});
+	}
+};
+
+/**
+ * @swagger
+ * /trips/{id}/driver-requests/{requestId}:
+ *   patch:
+ *     summary: Passenger respond to driver request
+ *     description: Passenger accepts or declines a driver's request to take their booking
+ *     tags: [Trips]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Trip/Booking ID
+ *       - in: path
+ *         name: requestId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Driver request ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [accept, decline]
+ *                 description: Action to take on the driver request
+ *                 example: "accept"
+ *     responses:
+ *       200:
+ *         description: Driver request response processed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - type: object
+ *                   description: Accept response
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                       example: true
+ *                     message:
+ *                       type: string
+ *                       example: "Driver request accepted! Please proceed to payment."
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         trip:
+ *                           type: object
+ *                           description: Updated trip with confirmed status
+ *                         needsPayment:
+ *                           type: boolean
+ *                           example: true
+ *                         acceptedDriver:
+ *                           type: object
+ *                           description: Driver information
+ *                         finalPrice:
+ *                           type: number
+ *                           example: 95000
+ *                 - type: object
+ *                   description: Decline response
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                       example: true
+ *                     message:
+ *                       type: string
+ *                       example: "Driver request declined"
+ *                     data:
+ *                       type: object
+ *                       description: Updated trip
+ *       400:
+ *         description: Bad request (invalid action, already responded, etc.)
+ *       403:
+ *         description: Not authorized (not the trip requester)
+ *       404:
+ *         description: Trip or driver request not found
+ *       500:
+ *         description: Server error
+ */
+// @desc    Passenger accept/decline driver request
+// @route   PATCH /api/trips/:id/driver-requests/:requestId
+// @access  Private (Trip requester only)
+exports.respondToDriverRequest = async (req, res) => {
+	try {
+		const { action } = req.body; // 'accept' or 'decline'
+		const { id: tripId, requestId } = req.params;
+
+		// Find the trip
+		const trip = await Trip.findById(tripId).populate('driverRequests.driver', 'fullName vehicle');
+		if (!trip) {
+			return res.status(404).json({
+				success: false,
+				error: 'Booking request not found',
+			});
+		}
+
+		// Check if user is the trip requester
+		if (trip.requestedBy.toString() !== req.user._id.toString()) {
+			return res.status(403).json({
+				success: false,
+				error: 'Only the trip requester can respond to driver requests',
+			});
+		}
+
+		// Check if trip is still pending driver
+		if (trip.status !== 'pending_driver') {
+			return res.status(400).json({
+				success: false,
+				error: 'This booking request is no longer pending',
+			});
+		}
+
+		// Find the driver request
+		const driverRequest = trip.driverRequests.id(requestId);
+		if (!driverRequest) {
+			return res.status(404).json({
+				success: false,
+				error: 'Driver request not found',
+			});
+		}
+
+		if (driverRequest.status !== 'pending') {
+			return res.status(400).json({
+				success: false,
+				error: 'This driver request has already been responded to',
+			});
+		}
+
+		if (action === 'accept') {
+			// Accept the driver
+			driverRequest.status = 'accepted';
+			driverRequest.respondedAt = new Date();
+
+			// Update trip status and assign driver
+			trip.status = 'confirmed';
+			trip.driver = driverRequest.driver._id;
+			trip.price = driverRequest.proposedPrice;
+			trip.confirmedAt = new Date();
+
+			// Get driver's vehicle type
+			const driver = await User.findById(driverRequest.driver._id);
+			if (driver.vehicle) {
+				// Determine vehicle type based on vehicle info
+				let vehicleType = 'car'; // default
+				if (driver.vehicle.seats <= 2) vehicleType = 'motorcycle';
+				else if (driver.vehicle.seats > 5) vehicleType = 'suv';
+
+				// Check for luxury brands
+				const luxuryBrands = ['mercedes', 'bmw', 'audi', 'lexus'];
+				if (
+					driver.vehicle.brand &&
+					luxuryBrands.some((brand) => driver.vehicle.brand.toLowerCase().includes(brand))
+				) {
+					vehicleType = 'luxury';
+				}
+
+				trip.vehicleTypeUsed = vehicleType;
+			}
+
+			// Decline all other pending requests
+			trip.driverRequests.forEach((req) => {
+				if (req._id.toString() !== requestId && req.status === 'pending') {
+					req.status = 'declined';
+					req.respondedAt = new Date();
+				}
+			});
+
+			await trip.save();
+
+			res.status(200).json({
+				success: true,
+				message: 'Driver request accepted! Please proceed to payment.',
+				data: {
+					trip,
+					needsPayment: true,
+					acceptedDriver: driverRequest.driver,
+					finalPrice: driverRequest.proposedPrice,
+				},
+			});
+		} else if (action === 'decline') {
+			// Decline the driver request
+			driverRequest.status = 'declined';
+			driverRequest.respondedAt = new Date();
+
+			await trip.save();
+
+			res.status(200).json({
+				success: true,
+				message: 'Driver request declined',
+				data: trip,
+			});
+		} else {
+			return res.status(400).json({
+				success: false,
+				error: 'Invalid action. Use "accept" or "decline"',
+			});
+		}
+	} catch (error) {
+		console.error('Respond to driver request error:', error);
 		res.status(500).json({
 			success: false,
 			error: error.message,
